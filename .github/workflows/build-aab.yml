@@ -20,7 +20,7 @@ jobs:
       - name: Gradle 설치
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: "8.13"
+         gradle-version: "9.3.1"
 
       - name: 업로드 키 복원
         run: |
