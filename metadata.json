@@ -1,0 +1,6 @@
+{
+  "name": "감정 다이어리(우치소)",
+  "description": "7가지 감정(희노애락애오욕)으로 내면의 감정을 기록하고 그래프와 사연으로 돌아보는 심플 감정 다이어리 앱",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
