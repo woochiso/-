@@ -16,21 +16,22 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-          cache: gradle
+
+      - name: Gradle 설치
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
 
       - name: 업로드 키 복원
         run: |
           echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > my-upload-key.jks
-
-      - name: Gradle 실행 권한 설정
-        run: chmod +x gradlew
 
       - name: Android App Bundle 만들기
         env:
           KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-        run: ./gradlew app:bundleRelease
+        run: gradle app:bundleRelease --stacktrace
 
       - name: AAB 파일 저장
         uses: actions/upload-artifact@v4
