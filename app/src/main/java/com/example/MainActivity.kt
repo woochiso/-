@@ -129,6 +129,7 @@ class MainActivity : ComponentActivity() {
                 } else {
                     Scaffold(
                         modifier = Modifier.fillMaxSize(),
+                        containerColor = MaterialTheme.colorScheme.background,
                         topBar = {
                             TopAppBar(
                                 title = {

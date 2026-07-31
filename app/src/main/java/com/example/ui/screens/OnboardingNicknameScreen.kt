@@ -82,9 +82,9 @@ fun OnboardingNicknameScreen(
             .background(
                 brush = Brush.verticalGradient(
                     colors = listOf(
-                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
-                        MaterialTheme.colorScheme.background,
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+                        Color.White,
+                        Color.White,
+                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.12f)
                     )
                 )
             )

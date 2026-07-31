@@ -86,6 +86,12 @@ import com.example.data.local.entity.InnerStoryEntity
 
 import com.example.ui.components.ShareStoryDialog
 
+import com.example.ui.components.SubEmotionPieChart
+import com.example.ui.viewmodel.StatDisplayType
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import com.example.ui.components.EmotionPieChart
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun EmotionDiaryScreen(
@@ -103,6 +109,9 @@ fun EmotionDiaryScreen(
     var showCustomDateDialog by remember { mutableStateOf(false) }
 
     val userNickname by viewModel.userNickname.collectAsStateWithLifecycle()
+    val selectedStatDisplayType by viewModel.selectedStatDisplayType.collectAsStateWithLifecycle()
+    val subEmotionStats by viewModel.subEmotionStats.collectAsStateWithLifecycle()
+    val pieChartSegments by viewModel.pieChartSegments.collectAsStateWithLifecycle()
     val chartPicture = remember { Picture() }
 
     val filteredStories = remember(innerStories, selectedRange) {
@@ -222,16 +231,56 @@ fun EmotionDiaryScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-                // 7 Olympic Interlocking Rings Chart
-                EmotionOlympicRingsChart(
-                    stats = emotionCategoryStats,
-                    selectedDateRangeText = selectedDateRangeText,
-                    userNickname = userNickname,
-                    picture = chartPicture,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                // Stat Display Type Switcher (대분류별 vs 세부 감정별)
+                TabRow(
+                    selectedTabIndex = selectedStatDisplayType.ordinal,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp)),
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    contentColor = MaterialTheme.colorScheme.primary
+                ) {
+                    StatDisplayType.entries.forEach { statType ->
+                        Tab(
+                            selected = selectedStatDisplayType == statType,
+                            onClick = { viewModel.setStatDisplayType(statType) },
+                            text = {
+                                Text(
+                                    text = statType.label,
+                                    fontWeight = if (selectedStatDisplayType == statType) FontWeight.Bold else FontWeight.Normal,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (selectedStatDisplayType == StatDisplayType.CATEGORY) {
+                    // 7 Olympic Interlocking Rings Chart
+                    EmotionOlympicRingsChart(
+                        stats = emotionCategoryStats,
+                        selectedDateRangeText = selectedDateRangeText,
+                        userNickname = userNickname,
+                        picture = chartPicture,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    EmotionPieChart(
+                        segments = pieChartSegments,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    SubEmotionPieChart(
+                        subEmotionStats = subEmotionStats,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 

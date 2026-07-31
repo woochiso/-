@@ -229,13 +229,15 @@ fun EmotionOlympicRingsChart(
                     val circleX = centerXPx + offsetX
                     val circleY = centerYPx + offsetY
 
-                    // Dynamic diameter according to emotion frequency
-                    val baseDiameter = 54.dp
-                    val extraDiameter = if (maxCount > 0 && count > 0) {
-                        28.dp * (count.toFloat() / maxCount.toFloat())
-                    } else 0.dp
-
-                    val targetDiameter = baseDiameter + extraDiameter
+                    // Area-based diameter calculation (Area proportional to count => Radius proportional to sqrt(count))
+                    val minDiameter = 38.dp
+                    val maxDiameter = 96.dp
+                    val targetDiameter = if (maxCount > 0 && count > 0) {
+                        val sqrtRatio = kotlin.math.sqrt(count.toFloat() / maxCount.toFloat())
+                        minDiameter + (maxDiameter - minDiameter) * sqrtRatio
+                    } else {
+                        minDiameter
+                    }
                     val animatedSize by animateDpAsState(
                         targetValue = targetDiameter,
                         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
@@ -415,26 +417,42 @@ private fun OlympicRingCircleItem(
             verticalArrangement = Arrangement.Center,
             modifier = Modifier.padding(2.dp)
         ) {
+            val hanjaFontSize = when {
+                size > 72.dp -> 18.sp
+                size > 52.dp -> 14.sp
+                else -> 11.sp
+            }
+            val labelFontSize = when {
+                size > 72.dp -> 12.sp
+                size > 52.dp -> 10.sp
+                else -> 8.sp
+            }
+            val countFontSize = when {
+                size > 72.dp -> 14.sp
+                size > 52.dp -> 11.sp
+                else -> 9.sp
+            }
+
             Text(
                 text = category.hanja.substring(0, 1),
-                style = if (size > 68.dp) MaterialTheme.typography.titleMedium else MaterialTheme.typography.labelLarge,
+                fontSize = hanjaFontSize,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )
 
-            Text(
-                text = category.koreanLabel,
-                style = MaterialTheme.typography.labelSmall,
-                fontSize = if (size > 68.dp) 11.sp else 9.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = Color.White.copy(alpha = 0.95f),
-                maxLines = 1
-            )
+            if (size > 42.dp) {
+                Text(
+                    text = category.koreanLabel,
+                    fontSize = labelFontSize,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White.copy(alpha = 0.95f),
+                    maxLines = 1
+                )
+            }
 
             Text(
                 text = "${count}회",
-                style = MaterialTheme.typography.labelSmall,
-                fontSize = if (size > 68.dp) 11.sp else 9.sp,
+                fontSize = countFontSize,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
             )

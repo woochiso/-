@@ -36,6 +36,18 @@ data class PieChartSegment(
     val percentage: Float
 )
 
+data class SubEmotionStat(
+    val emotionName: String,
+    val category: EmotionCategory,
+    val count: Int,
+    val percentage: Float
+)
+
+enum class StatDisplayType(val label: String) {
+    CATEGORY("대분류별 통계 (희노애락애오욕)"),
+    SUB_EMOTION("세부 감정별 통계")
+}
+
 enum class ChartTimeRange(val label: String) {
     TODAY("오늘"),
     WEEK("최근 7일"),
@@ -54,11 +66,15 @@ class EmotionViewModel(application: Application) : AndroidViewModel(application)
         repository = EmotionRepository(
             favoriteEmotionDao = db.favoriteEmotionDao(),
             diaryEntryDao = db.diaryEntryDao(),
-            innerStoryDao = db.innerStoryDao()
+            innerStoryDao = db.innerStoryDao(),
+            emotionCategoryDao = db.emotionCategoryDao(),
+            emotionItemDao = db.emotionItemDao(),
+            emotionRecordDao = db.emotionRecordDao()
         )
         checkDailyReset()
         viewModelScope.launch {
             repository.purgeQuietTranquilityStories()
+            repository.cleanupDuplicateRecords()
         }
     }
 
@@ -219,10 +235,28 @@ class EmotionViewModel(application: Application) : AndroidViewModel(application)
                 categoryCountMap[cat] = (categoryCountMap[cat] ?: 0) + count
             }
         } else {
-            entries.forEach { entry ->
-                val cat = EmotionCategory.fromCode(entry.primaryCategoryCode)
-                val wordsCount = entry.emotionsListCsv.split(",").filter { it.isNotBlank() }.size.coerceAtLeast(1)
-                categoryCountMap[cat] = (categoryCountMap[cat] ?: 0) + wordsCount
+            // Group entries by dateString so each date's single saved record is used for counts
+            val entriesByDate = entries.groupBy { it.dateString }
+            entriesByDate.forEach { (_, dateEntries) ->
+                val mainEntry = dateEntries.find { it.memo.startsWith("오늘의 즐찾 감정 저장") }
+                    ?: dateEntries.maxByOrNull { it.timestamp }
+
+                mainEntry?.let { entry ->
+                    val entryFallbackCat = EmotionCategory.fromCode(entry.primaryCategoryCode)
+                    val words = entry.emotionsListCsv.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                    if (words.isEmpty()) {
+                        categoryCountMap[entryFallbackCat] = (categoryCountMap[entryFallbackCat] ?: 0) + 1
+                    } else {
+                        words.forEach { rawWord ->
+                            val count = Regex("(\\d+)회").find(rawWord)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+                            val cleanWord = rawWord.replace(Regex("\\s*\\d+회"), "")
+                                .replace(Regex("\\(사연:.*?\\)"), "")
+                                .trim()
+                            val resolvedCat = PresetEmotions.ALL_EMOTIONS.find { it.word == cleanWord }?.category ?: entryFallbackCat
+                            categoryCountMap[resolvedCat] = (categoryCountMap[resolvedCat] ?: 0) + count
+                        }
+                    }
+                }
             }
         }
 
@@ -267,45 +301,128 @@ class EmotionViewModel(application: Application) : AndroidViewModel(application)
         initialValue = PresetEmotions.ALL_EMOTIONS
     )
 
-    // Pie chart statistics calculation
-    val pieChartSegments: StateFlow<List<PieChartSegment>> = combine(
+    private val _selectedStatDisplayType = MutableStateFlow(StatDisplayType.CATEGORY)
+    val selectedStatDisplayType: StateFlow<StatDisplayType> = _selectedStatDisplayType.asStateFlow()
+
+    fun setStatDisplayType(type: StatDisplayType) {
+        _selectedStatDisplayType.value = type
+    }
+
+    // Sub-emotion detailed stats calculation
+    val subEmotionStats: StateFlow<List<SubEmotionStat>> = combine(
         selectedChartRange,
         filteredDiaryEntries,
-        favorites
-    ) { range, entries, favList ->
-        val categoryCountMap = mutableMapOf<EmotionCategory, Int>()
-        EmotionCategory.entries.forEach { categoryCountMap[it] = 0 }
+        favorites,
+        repository.allEmotionRecords,
+        repository.allEmotionItems
+    ) { range, entries, favList, records, items ->
+        val wordCountMap = mutableMapOf<String, Pair<EmotionCategory, Int>>()
+        val itemCategoryMap = items.associate { item ->
+            val cat = when (item.categoryId) {
+                1 -> EmotionCategory.JOY
+                2 -> EmotionCategory.ANGER
+                3 -> EmotionCategory.SORROW
+                4 -> EmotionCategory.PLEASURE
+                5 -> EmotionCategory.LOVE
+                6 -> EmotionCategory.HATRED
+                7 -> EmotionCategory.DESIRE
+                else -> EmotionCategory.JOY
+            }
+            item.emotionName to cat
+        }
 
         if (range == ChartTimeRange.FAVORITES) {
             favList.forEach { fav ->
                 val cat = EmotionCategory.fromCode(fav.categoryCode)
                 val count = if (fav.countTotal > 0) fav.countTotal else fav.countToday
-                categoryCountMap[cat] = (categoryCountMap[cat] ?: 0) + count
+                if (count > 0) {
+                    val current = wordCountMap[fav.word]?.second ?: 0
+                    wordCountMap[fav.word] = Pair(cat, current + count)
+                }
             }
         } else {
             entries.forEach { entry ->
                 val cat = EmotionCategory.fromCode(entry.primaryCategoryCode)
-                categoryCountMap[cat] = (categoryCountMap[cat] ?: 0) + 1
+                val words = entry.emotionsListCsv.split(",").map { it.trim() }.filter { it.isNotBlank() }
+                words.forEach { rawWord ->
+                    val count = Regex("(\\d+)회").find(rawWord)?.groupValues?.get(1)?.toIntOrNull() ?: 1
+                    val cleanWord = rawWord.replace(Regex("\\s*\\d+회"), "").trim()
+                    val resolvedCat = itemCategoryMap[cleanWord] ?: cat
+                    val current = wordCountMap[cleanWord]?.second ?: 0
+                    wordCountMap[cleanWord] = Pair(resolvedCat, current + count)
+                }
+            }
+
+            val today = getTodayDateString()
+            val filteredRecords = when (range) {
+                ChartTimeRange.TODAY -> records.filter { it.recordDate == today }
+                ChartTimeRange.WEEK -> {
+                    val start = getDateBeforeDays(6)
+                    records.filter { it.recordDate in start..today }
+                }
+                ChartTimeRange.MONTH -> {
+                    val start = getDateBeforeDays(29)
+                    records.filter { it.recordDate in start..today }
+                }
+                ChartTimeRange.ALL_TIME -> records
+                ChartTimeRange.CUSTOM -> records
+                ChartTimeRange.FAVORITES -> emptyList()
+            }
+
+            val itemIdToNameMap = items.associate { it.id to it.emotionName }
+            val categoryIdToCatMap = mapOf(
+                1 to EmotionCategory.JOY,
+                2 to EmotionCategory.ANGER,
+                3 to EmotionCategory.SORROW,
+                4 to EmotionCategory.PLEASURE,
+                5 to EmotionCategory.LOVE,
+                6 to EmotionCategory.HATRED,
+                7 to EmotionCategory.DESIRE
+            )
+
+            filteredRecords.forEach { rec ->
+                val name = itemIdToNameMap[rec.emotionItemId]
+                val cat = categoryIdToCatMap[rec.categoryId] ?: EmotionCategory.JOY
+                if (name != null && !wordCountMap.containsKey(name)) {
+                    val current = wordCountMap[name]?.second ?: 0
+                    wordCountMap[name] = Pair(cat, current + rec.count)
+                }
             }
         }
 
-        val totalCount = categoryCountMap.values.sum()
-
+        val totalCount = wordCountMap.values.sumOf { it.second }
         if (totalCount == 0) {
             emptyList()
         } else {
-            EmotionCategory.entries.mapNotNull { cat ->
-                val count = categoryCountMap[cat] ?: 0
-                if (count > 0) {
-                    val percentage = (count.toFloat() / totalCount.toFloat()) * 100f
-                    PieChartSegment(cat, count, percentage)
-                } else null
-            }
+            wordCountMap.map { (word, pair) ->
+                val pct = (pair.second.toFloat() / totalCount.toFloat()) * 100f
+                SubEmotionStat(
+                    emotionName = word,
+                    category = pair.first,
+                    count = pair.second,
+                    percentage = pct
+                )
+            }.sortedByDescending { it.count }
         }
     }.stateIn(
         scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
+        started = SharingStarted.Eagerly,
         initialValue = emptyList()
+    )
+
+    // Pie chart statistics calculation - Unified with emotionCategoryStats
+    val pieChartSegments: StateFlow<List<PieChartSegment>> = emotionCategoryStats.map { stats ->
+        stats.map { stat ->
+            PieChartSegment(
+                category = stat.category,
+                count = stat.count,
+                percentage = stat.percentage
+            )
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = EmotionCategory.entries.map { PieChartSegment(it, 0, 0f) }
     )
 
     fun setSearchQuery(query: String) {
@@ -335,6 +452,13 @@ class EmotionViewModel(application: Application) : AndroidViewModel(application)
             val isAdded = repository.toggleFavorite(word, categoryCode)
             val msg = if (isAdded) "'$word' 감정을 즐겨찾기에 추가했습니다." else "'$word' 감정을 즐겨찾기에서 해제했습니다."
             _toastEvent.emit(msg)
+        }
+    }
+
+    fun saveTodayEmotions() {
+        viewModelScope.launch {
+            repository.saveTodayEmotionsToDiary()
+            _toastEvent.emit("오늘 감정이 저장되었습니다.")
         }
     }
 

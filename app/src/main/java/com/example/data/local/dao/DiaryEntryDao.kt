@@ -13,6 +13,9 @@ interface DiaryEntryDao {
     @Query("SELECT * FROM diary_entries ORDER BY timestamp DESC")
     fun getAllEntries(): Flow<List<DiaryEntryEntity>>
 
+    @Query("SELECT * FROM diary_entries ORDER BY timestamp DESC")
+    suspend fun getAllEntriesDirect(): List<DiaryEntryEntity>
+
     @Query("SELECT * FROM diary_entries WHERE dateString = :date ORDER BY timestamp DESC")
     fun getEntriesByDate(date: String): Flow<List<DiaryEntryEntity>>
 

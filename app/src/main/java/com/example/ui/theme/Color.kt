@@ -10,9 +10,9 @@ val FreshDeepIndigo = Color(0xFF312E81)
 val FreshSecondary = Color(0xFF0EA5E9)
 val FreshSecondaryContainer = Color(0xFFE0F2FE)
 
-val FreshBackground = Color(0xFFF8FAFC)
+val FreshBackground = Color(0xFFFFFFFF)
 val FreshSurface = Color(0xFFFFFFFF)
-val FreshSurfaceVariant = Color(0xFFF1F5F9)
+val FreshSurfaceVariant = Color(0xFFF8FAFC)
 val FreshOutline = Color(0xFFE2E8F0)
 
 val FreshTextPrimary = Color(0xFF0F172A)

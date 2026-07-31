@@ -13,6 +13,9 @@ interface FavoriteEmotionDao {
     @Query("SELECT * FROM favorite_emotions ORDER BY id ASC")
     fun getAllFavorites(): Flow<List<FavoriteEmotionEntity>>
 
+    @Query("SELECT * FROM favorite_emotions ORDER BY id ASC")
+    suspend fun getAllFavoritesList(): List<FavoriteEmotionEntity>
+
     @Query("SELECT * FROM favorite_emotions WHERE word = :word LIMIT 1")
     suspend fun getFavoriteByWord(word: String): FavoriteEmotionEntity?
 

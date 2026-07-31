@@ -156,7 +156,7 @@ fun FavoriteEmotionsScreen(
                 LazyColumn(
                     modifier = Modifier.weight(1f),
                     verticalArrangement = Arrangement.spacedBy(14.dp),
-                    contentPadding = PaddingValues(bottom = 80.dp)
+                    contentPadding = PaddingValues(bottom = 12.dp)
                 ) {
                     items(favorites, key = { it.word }) { fav ->
                         val category = EmotionCategory.fromCode(fav.categoryCode)
@@ -369,6 +369,34 @@ fun FavoriteEmotionsScreen(
                             }
                         }
                     }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Save Today's Emotions Button (오늘 감정 저장)
+                Button(
+                    onClick = { viewModel.saveTodayEmotions() },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
+                        .height(52.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    ),
+                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 2.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "오늘 감정 저장",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
@@ -599,27 +627,14 @@ fun FavoriteEmotionsScreen(
                                     associatedEmotions = listOf(fav.word),
                                     dateString = viewModel.getTodayDateString()
                                 )
-                                // Save connected story title to favorite entity
+                                // Save connected story title to favorite entity only (do NOT change count or add diary entry)
                                 viewModel.updateFavorite(fav.copy(connectedStoryTitle = title))
-                                viewModel.addDiaryEntry(
-                                    dateString = viewModel.getTodayDateString(),
-                                    primaryCategory = category,
-                                    selectedEmotions = listOf(fav.word),
-                                    memo = "[연결된 사연: $title]",
-                                    intensity = 3
-                                )
                             }
                         } else {
                             val selectedStory = innerStories.find { it.id == selectedStoryId }
                             if (selectedStory != null) {
+                                // Save connected story title to favorite entity only (do NOT change count or add diary entry)
                                 viewModel.updateFavorite(fav.copy(connectedStoryTitle = selectedStory.title))
-                                viewModel.addDiaryEntry(
-                                    dateString = viewModel.getTodayDateString(),
-                                    primaryCategory = category,
-                                    selectedEmotions = listOf(fav.word),
-                                    memo = "[연결된 사연: ${selectedStory.title}]",
-                                    intensity = 3
-                                )
                             }
                         }
                         selectedFavForStory = null
@@ -629,8 +644,20 @@ fun FavoriteEmotionsScreen(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { selectedFavForStory = null }) {
-                    Text("취소")
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (!fav.connectedStoryTitle.isNullOrBlank()) {
+                        TextButton(
+                            onClick = {
+                                viewModel.updateFavorite(fav.copy(connectedStoryTitle = null))
+                                selectedFavForStory = null
+                            }
+                        ) {
+                            Text("연결 해제", color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                    TextButton(onClick = { selectedFavForStory = null }) {
+                        Text("취소")
+                    }
                 }
             }
         )
