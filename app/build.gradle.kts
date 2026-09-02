@@ -17,7 +17,7 @@ android {
     applicationId = "com.aistudio.emotiondiary.xrqvzp"
     minSdk = 24
     targetSdk = 36
-    versionCode = 2
+    versionCode = 3
     versionName = "1.1"
 
     buildConfigField("String", "WOOCHISO_API_BASE_URL", "\"https://woochiso.com/api/\"")
