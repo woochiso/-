@@ -13,5 +13,13 @@ data class InnerStoryEntity(
     val primaryCategoryCode: String,
     val associatedEmotionsCsv: String,
     val dateString: String,
+    val eventPeriod: String = "",
+    val eventAge: Int? = null,
+    val eventYear: Int? = null,
+    val eventCategory: String = "",
+    val relatedPerson: String = "",
+    val importance: Int = 1,
+    val currentImpact: Int = 1,
+    val currentStatus: String = "",
     val createdAt: Long = System.currentTimeMillis()
 )

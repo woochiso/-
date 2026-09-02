@@ -9,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -59,7 +60,10 @@ import kotlin.math.sin
 data class EmotionCategoryStat(
     val category: EmotionCategory,
     val count: Int,
-    val percentage: Float
+    val percentage: Float,
+    val categoryLabel: String = "${category.hanja} ${category.koreanLabel}",
+    val categoryHanja: String = category.hanja,
+    val color: Color = category.color
 )
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -68,13 +72,17 @@ fun EmotionOlympicRingsChart(
     stats: List<EmotionCategoryStat>,
     selectedDateRangeText: String,
     userNickname: String? = null,
+    showNickname: Boolean = true,
     picture: Picture? = null,
+    selectedCategoryCode: String? = null,
+    onCategorySelected: (EmotionCategoryStat?) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var selectedCategoryCode by remember { mutableStateOf<String?>(null) }
-
     val totalCount = remember(stats) { stats.sumOf { it.count } }
-    val maxCount = remember(stats) { stats.maxOfOrNull { it.count }?.coerceAtLeast(1) ?: 1 }
+    val maxCount = remember(stats) { stats.maxOfOrNull { it.count } ?: 0 }
+    val minPositiveCount = remember(stats) {
+        stats.map { it.count }.filter { it > 0 }.minOrNull() ?: 0
+    }
 
     // Map stats by category code
     val statMap = remember(stats) {
@@ -83,13 +91,13 @@ fun EmotionOlympicRingsChart(
 
     // 7 categories arranged in circle order
     val orderedCategories = listOf(
-        EmotionCategory.JOY,      // 喜 (Red / Orange)
-        EmotionCategory.ANGER,    // 怒 (Orange / Red)
-        EmotionCategory.PLEASURE, // 樂 (Green)
-        EmotionCategory.LOVE,     // 愛 (Teal / Blue)
-        EmotionCategory.SORROW,   // 哀 (Cyan / Sky)
-        EmotionCategory.HATRED,   // 惡 (Indigo / Violet)
-        EmotionCategory.DESIRE    // 慾 (Purple / Magenta)
+        EmotionCategory.JOY,
+        EmotionCategory.PLEASURE,
+        EmotionCategory.DESIRE,
+        EmotionCategory.SORROW,
+        EmotionCategory.HATRED,
+        EmotionCategory.ANGER,
+        EmotionCategory.LOVE
     )
 
     Card(
@@ -146,7 +154,11 @@ fun EmotionOlympicRingsChart(
                         modifier = Modifier.size(20.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    val displayName = if (!userNickname.isNullOrBlank()) userNickname else "사용자"
+                    val displayName = if (showNickname) {
+                        if (!userNickname.isNullOrBlank()) userNickname else "사용자"
+                    } else {
+                        "감정그래프"
+                    }
                     Text(
                         text = "$displayName($selectedDateRangeText)",
                         style = MaterialTheme.typography.titleMedium,
@@ -173,7 +185,7 @@ fun EmotionOlympicRingsChart(
 
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = "감정 다이어리(우치소) • 원형 감정 그래프",
+                text = "7감정 버블",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline,
                 modifier = Modifier.fillMaxWidth()
@@ -185,7 +197,7 @@ fun EmotionOlympicRingsChart(
             BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(260.dp)
+                    .aspectRatio(1.05f)
                     .background(
                         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
                         RoundedCornerShape(24.dp)
@@ -199,19 +211,10 @@ fun EmotionOlympicRingsChart(
                 val centerXPx = containerWidth / 2
                 val centerYPx = containerHeight / 2
 
-                // Ring radius around center
-                val ringRadius = 64.dp
-
-                // Guide inner circle canvas
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val cX = size.width / 2
-                    val cY = size.height / 2
-                    drawCircle(
-                        color = Color.LightGray.copy(alpha = 0.15f),
-                        radius = ringRadius.toPx(),
-                        center = Offset(cX, cY)
-                    )
-                }
+                // Scale the complete graph from the available mobile width.
+                val ringRadius = containerWidth * 0.27f
+                val minDiameter = containerWidth * 0.19f
+                val maxDiameter = containerWidth * 0.34f
 
                 // Render 7 Circles in Ring arrangement
                 orderedCategories.forEachIndexed { index, cat ->
@@ -229,15 +232,17 @@ fun EmotionOlympicRingsChart(
                     val circleX = centerXPx + offsetX
                     val circleY = centerYPx + offsetY
 
-                    // Area-based diameter calculation (Area proportional to count => Radius proportional to sqrt(count))
-                    val minDiameter = 38.dp
-                    val maxDiameter = 96.dp
-                    val targetDiameter = if (maxCount > 0 && count > 0) {
-                        val sqrtRatio = kotlin.math.sqrt(count.toFloat() / maxCount.toFloat())
-                        minDiameter + (maxDiameter - minDiameter) * sqrtRatio
-                    } else {
-                        minDiameter
+                    // Normalize between the smallest and largest non-zero counts so
+                    // close real-world values remain visually distinguishable.
+                    // Zero always stays at the minimum diameter.
+                    val normalizedCount = when {
+                        count <= 0 -> 0f
+                        maxCount == minPositiveCount -> 1f
+                        else -> (count - minPositiveCount).toFloat() /
+                            (maxCount - minPositiveCount).toFloat()
                     }
+                    val targetDiameter = minDiameter +
+                        (maxDiameter - minDiameter) * normalizedCount.coerceIn(0f, 1f)
                     val animatedSize by animateDpAsState(
                         targetValue = targetDiameter,
                         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
@@ -253,7 +258,7 @@ fun EmotionOlympicRingsChart(
                         centerX = circleX,
                         centerY = circleY,
                         onClick = {
-                            selectedCategoryCode = if (isSelected) null else cat.code
+                            onCategorySelected(if (isSelected) null else stat)
                         }
                     )
                 }
@@ -339,9 +344,9 @@ fun EmotionOlympicRingsChart(
                             .padding(horizontal = 3.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .clickable {
-                                selectedCategoryCode = if (isSelected) null else stat.category.code
+                                onCategorySelected(if (isSelected) null else stat)
                             },
-                        color = if (isSelected) stat.category.color.copy(alpha = 0.25f)
+                        color = if (isSelected) stat.color.copy(alpha = 0.25f)
                         else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                     ) {
                         Row(
@@ -351,11 +356,11 @@ fun EmotionOlympicRingsChart(
                             Box(
                                 modifier = Modifier
                                     .size(10.dp)
-                                    .background(stat.category.color, CircleShape)
+                                    .background(stat.color, CircleShape)
                             )
                             Spacer(modifier = Modifier.width(5.dp))
                             Text(
-                                text = "${stat.category.hanja} ${stat.category.koreanLabel}",
+                                text = stat.categoryLabel,
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -365,7 +370,7 @@ fun EmotionOlympicRingsChart(
                                 text = "${stat.count}회",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
-                                color = if (stat.count > 0) stat.category.color else MaterialTheme.colorScheme.outline
+                                color = if (stat.count > 0) stat.color else MaterialTheme.colorScheme.outline
                             )
                         }
                     }
@@ -385,6 +390,7 @@ private fun OlympicRingCircleItem(
     onClick: () -> Unit
 ) {
     val category = stat.category
+    val statColor = stat.color
     val count = stat.count
 
     val hasCount = count > 0
@@ -400,9 +406,9 @@ private fun OlympicRingCircleItem(
             )
             .clip(CircleShape)
             .background(
-                color = if (isSelected) category.color
-                else if (hasCount) category.color.copy(alpha = 0.85f)
-                else category.color.copy(alpha = 0.35f)
+                color = if (isSelected) statColor
+                else if (hasCount) statColor.copy(alpha = 0.85f)
+                else statColor.copy(alpha = 0.35f)
             )
             .border(
                 width = if (isSelected) 3.dp else 1.5.dp,
@@ -434,7 +440,7 @@ private fun OlympicRingCircleItem(
             }
 
             Text(
-                text = category.hanja.substring(0, 1),
+                text = stat.categoryHanja.take(1),
                 fontSize = hanjaFontSize,
                 fontWeight = FontWeight.Bold,
                 color = Color.White
@@ -442,7 +448,7 @@ private fun OlympicRingCircleItem(
 
             if (size > 42.dp) {
                 Text(
-                    text = category.koreanLabel,
+                    text = stat.categoryLabel.substringAfter(' ', stat.categoryLabel),
                     fontSize = labelFontSize,
                     fontWeight = FontWeight.SemiBold,
                     color = Color.White.copy(alpha = 0.95f),

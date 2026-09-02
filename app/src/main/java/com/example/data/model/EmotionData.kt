@@ -1,6 +1,7 @@
 package com.example.data.model
 
 import androidx.compose.ui.graphics.Color
+import com.example.ui.theme.EmotionColors
 
 enum class EmotionCategory(
     val code: String,
@@ -13,49 +14,49 @@ enum class EmotionCategory(
         code = "JOY",
         hanja = "희(喜)",
         koreanLabel = "기쁨",
-        colorHex = 0xFFFF9F1C, // Cheerful Coral Amber
+        colorHex = EmotionColors.JOY_ARGB,
         description = "마음이 밝고 흐뭇하며 유쾌한 감정"
     ),
     ANGER(
         code = "ANGER",
         hanja = "노(怒)",
         koreanLabel = "노여움",
-        colorHex = 0xFFFF4757, // Vivid Rose Red
+        colorHex = EmotionColors.ANGER_ARGB,
         description = "분하고 서운하거나 불쾌하여 솟구치는 감정"
     ),
     SORROW(
         code = "SORROW",
         hanja = "애(哀)",
         koreanLabel = "슬픔",
-        colorHex = 0xFF1E90FF, // Luminous Sapphire Azure
+        colorHex = EmotionColors.SADNESS_ARGB,
         description = "마음이 아프고 눈물이 나며 허전한 감정"
     ),
     PLEASURE(
         code = "PLEASURE",
         hanja = "락(樂)",
         koreanLabel = "즐거움",
-        colorHex = 0xFF2ED573, // Vibrant Lime Mint
+        colorHex = EmotionColors.PLEASURE_ARGB,
         description = "신나고 활기차며 생동감 넘치는 감정"
     ),
     LOVE(
         code = "LOVE",
         hanja = "애(愛)",
         koreanLabel = "사랑",
-        colorHex = 0xFFFF6B81, // Vibrant Blossom Pink
+        colorHex = EmotionColors.LOVE_ARGB,
         description = "따뜻하고 아끼며 뭉클하게 전해지는 감정"
     ),
     HATRED(
         code = "HATRED",
         hanja = "오(惡)",
         koreanLabel = "미움",
-        colorHex = 0xFF8B5CF6, // Bright Royal Violet
+        colorHex = EmotionColors.HATE_ARGB,
         description = "싫고 거부감이 들며 안타까운 감정"
     ),
     DESIRE(
         code = "DESIRE",
         hanja = "욕(慾)",
         koreanLabel = "바라다",
-        colorHex = 0xFF00CEC9, // Vibrant Electric Turquoise
+        colorHex = EmotionColors.DESIRE_ARGB,
         description = "간절히 원하고 기대하며 소망하는 감정"
     );
 
@@ -76,7 +77,9 @@ enum class EmotionCategory(
 data class EmotionWordItem(
     val word: String,
     val category: EmotionCategory,
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+    val emotionId: Long? = null,
+    val description: String? = null
 )
 
 object PresetEmotions {

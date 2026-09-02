@@ -1,5 +1,6 @@
-package com.example.ui.components
+﻿package com.example.ui.components
 
+import android.graphics.Picture
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -21,10 +22,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -37,10 +40,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Canvas
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.draw
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -113,7 +119,7 @@ fun EmotionPieChart(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "내면의 감정 분포 (원형 그래프)",
+                text = "감정 비율",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.primary,
@@ -182,7 +188,7 @@ fun EmotionPieChart(
 
                             if (sweepAngle > 0f) {
                                 drawArc(
-                                    color = segment.category.color,
+                                    color = segment.color,
                                     startAngle = startAngle,
                                     sweepAngle = (sweepAngle - 1.5f).coerceAtLeast(0.5f),
                                     useCenter = false,
@@ -193,7 +199,7 @@ fun EmotionPieChart(
                             } else {
                                 // Draw thin tick line for 0% category so all 7 colors are visually represented on ring
                                 drawArc(
-                                    color = segment.category.color.copy(alpha = 0.5f),
+                                    color = segment.color.copy(alpha = 0.5f),
                                     startAngle = startAngle,
                                     sweepAngle = 1.5f,
                                     useCenter = false,
@@ -215,10 +221,10 @@ fun EmotionPieChart(
                     if (selectedSegmentIndex != null && selectedSegmentIndex!! < fullSegments.size) {
                         val seg = fullSegments[selectedSegmentIndex!!]
                         Text(
-                            text = seg.category.hanja,
+                            text = seg.categoryHanja,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = seg.category.color
+                            color = seg.color
                         )
                         Text(
                             text = "${seg.count}회 (${String.format("%.1f", seg.percentage)}%)",
@@ -261,10 +267,11 @@ fun EmotionPieChart(
                             .clickable {
                                 selectedSegmentIndex = if (isSelected) null else index
                             },
-                        color = if (isSelected) segment.category.color.copy(alpha = 0.25f)
-                        else if (hasCount) segment.category.color.copy(alpha = 0.08f)
+                        color = if (isSelected) segment.color.copy(alpha = 0.25f)
+                        else if (hasCount) segment.color.copy(alpha = 0.08f)
                         else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
                     ) {
+                        Column {
                         Row(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -272,11 +279,11 @@ fun EmotionPieChart(
                             Box(
                                 modifier = Modifier
                                     .size(10.dp)
-                                    .background(segment.category.color, CircleShape)
+                                    .background(segment.color, CircleShape)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
-                                text = "${segment.category.hanja} ${segment.category.koreanLabel}",
+                                text = segment.categoryLabel,
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = if (hasCount || isSelected) FontWeight.Bold else FontWeight.Normal,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -286,7 +293,7 @@ fun EmotionPieChart(
                                 text = "${segment.count}회",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = if (hasCount) segment.category.color else MaterialTheme.colorScheme.outline
+                                color = if (hasCount) segment.color else MaterialTheme.colorScheme.outline
                             )
                             if (hasCount) {
                                 Text(
@@ -302,11 +309,18 @@ fun EmotionPieChart(
         }
     }
 }
+}
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SubEmotionPieChart(
     subEmotionStats: List<com.example.ui.viewmodel.SubEmotionStat>,
+    selectedDateRangeText: String = "",
+    userNickname: String? = null,
+    showNickname: Boolean = true,
+    picture: Picture? = null,
+    selectedEmotionId: Long? = null,
+    onEmotionSelected: (com.example.ui.viewmodel.SubEmotionStat?) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     if (subEmotionStats.isEmpty()) {
@@ -332,9 +346,29 @@ fun SubEmotionPieChart(
     }
 
     val totalCount = subEmotionStats.sumOf { it.count }
+    val maxCount = subEmotionStats.maxOfOrNull { it.count }?.coerceAtLeast(1) ?: 1
 
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .then(
+                if (picture != null) {
+                    Modifier.drawWithCache {
+                        val width = size.width.toInt()
+                        val height = size.height.toInt()
+                        onDrawWithContent {
+                            if (width > 0 && height > 0) {
+                                val pictureCanvas = Canvas(picture.beginRecording(width, height))
+                                draw(this, layoutDirection, pictureCanvas, size) {
+                                    this@onDrawWithContent.drawContent()
+                                }
+                                picture.endRecording()
+                            }
+                            drawContent()
+                        }
+                    }
+                } else Modifier
+            ),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
@@ -347,66 +381,42 @@ fun SubEmotionPieChart(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            val displayName = if (showNickname) userNickname?.takeIf { it.isNotBlank() } ?: "사용자" else "감정그래프"
+            if (selectedDateRangeText.isNotBlank()) {
+                Text(
+                    text = "$displayName($selectedDateRangeText)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp)
+                )
+            }
             Text(
-                text = "세부 감정별 점유율 (총 ${totalCount}회 기록)",
+                text = "세부 감정 통계 (총 ${totalCount}회)",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
                 modifier = Modifier.padding(bottom = 12.dp)
             )
 
-            // Canvas Pie Chart for Sub-Emotions
-            Box(
-                modifier = Modifier.size(180.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Canvas(modifier = Modifier.size(180.dp)) {
-                    var startAngle = -90f
-                    val strokeWidth = 28.dp.toPx()
-
-                    subEmotionStats.forEach { stat ->
-                        val sweepAngle = (stat.percentage / 100f) * 360f
-                        if (sweepAngle > 0f) {
-                            drawArc(
-                                color = stat.category.color,
-                                startAngle = startAngle,
-                                sweepAngle = sweepAngle,
-                                useCenter = false,
-                                style = Stroke(width = strokeWidth)
-                            )
-                            startAngle += sweepAngle
-                        }
-                    }
-                }
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = "세부 감정",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline
-                    )
-                    Text(
-                        text = "${subEmotionStats.size}종류",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
             // Ranking list for sub-emotions
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                subEmotionStats.take(10).forEachIndexed { index, stat ->
+                subEmotionStats.forEachIndexed { index, stat ->
+                    val isSelected = stat.emotionId != null && stat.emotionId == selectedEmotionId
                     Surface(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(enabled = stat.emotionId != null) {
+                                onEmotionSelected(if (isSelected) null else stat)
+                            },
                         shape = RoundedCornerShape(12.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        color = if (isSelected) stat.color.copy(alpha = 0.12f)
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                        border = if (isSelected) BorderStroke(2.dp, stat.color) else null
                     ) {
+                        Column {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -424,14 +434,14 @@ fun SubEmotionPieChart(
                             // Parent Category Tag
                             Surface(
                                 shape = RoundedCornerShape(6.dp),
-                                color = stat.category.color.copy(alpha = 0.2f),
+                                color = stat.color.copy(alpha = 0.2f),
                                 modifier = Modifier.padding(end = 8.dp)
                             ) {
                                 Text(
-                                    text = stat.category.hanja,
+                                    text = stat.categoryLabel.substringBefore(' '),
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = stat.category.color,
+                                    color = stat.color,
                                     modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
@@ -445,11 +455,36 @@ fun SubEmotionPieChart(
                             )
 
                             Text(
-                                text = "${stat.count}회 (${String.format("%.1f", stat.percentage)}%)",
+                                text = "${stat.count}회",
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                                contentDescription = "${stat.emotionName} 관련 사연 보기",
+                                tint = if (isSelected) stat.color else MaterialTheme.colorScheme.outline,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        stat.averageLinkStrength?.let { strength ->
+                            Text(
+                                text = "관련 정도 평균 ${String.format("%.1f", strength)} / 5",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 40.dp, bottom = 6.dp)
+                            )
+                        }
+                        LinearProgressIndicator(
+                            progress = { (stat.count.toFloat() / maxCount).coerceIn(0f, 1f) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 40.dp, end = 12.dp, bottom = 8.dp)
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(6.dp)),
+                            color = stat.color,
+                            trackColor = stat.color.copy(alpha = 0.15f)
+                        )
                         }
                     }
                 }

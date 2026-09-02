@@ -30,7 +30,9 @@ private val LightColorScheme = lightColorScheme(
     onSurface = FreshTextPrimary,
     surfaceVariant = FreshSurfaceVariant,
     onSurfaceVariant = FreshTextVariant,
-    outline = FreshOutline
+    outline = FreshOutline,
+    error = FreshError,
+    onError = Color.White
 )
 
 private val DarkColorScheme = LightColorScheme

@@ -3,8 +3,13 @@ package com.example.ui.screens
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Picture
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.view.View
 import android.widget.Toast
+import android.util.Log
+import com.example.BuildConfig
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -26,10 +31,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
@@ -37,9 +42,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -50,6 +55,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -77,6 +83,8 @@ import kotlinx.coroutines.launch
 
 import com.example.ui.components.EmotionCategoryStat
 import com.example.ui.components.EmotionOlympicRingsChart
+import com.example.ui.components.EmotionTrendChart
+import com.example.ui.components.EmotionStoryInsightsPanel
 
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material.icons.filled.MenuBook
@@ -88,9 +96,12 @@ import com.example.ui.components.ShareStoryDialog
 
 import com.example.ui.components.SubEmotionPieChart
 import com.example.ui.viewmodel.StatDisplayType
+import com.example.ui.viewmodel.GraphScope
+import com.example.data.remote.dto.StoryDto
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import com.example.ui.components.EmotionPieChart
+import androidx.compose.material3.CircularProgressIndicator
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -101,18 +112,40 @@ fun EmotionDiaryScreen(
     selectedDateRangeText: String,
     selectedRange: ChartTimeRange,
     innerStories: List<InnerStoryEntity>,
+    serverStories: List<StoryDto> = emptyList(),
+    loginNickname: String? = null,
+    onOpenStoryDetail: (Long) -> Unit = {},
+    showPageTitle: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     val view = LocalView.current
     var showAddEntryDialog by remember { mutableStateOf(false) }
     var showCustomDateDialog by remember { mutableStateOf(false) }
+    var includeNicknameInShare by remember { mutableStateOf(true) }
+    var includeStoryTitleInShare by remember { mutableStateOf(false) }
+    var showStoryPicker by remember { mutableStateOf(false) }
+    var selectedStory by remember { mutableStateOf<StoryDto?>(null) }
 
     val userNickname by viewModel.userNickname.collectAsStateWithLifecycle()
+    val graphNickname = loginNickname?.takeIf { it.isNotBlank() } ?: userNickname?.takeIf { it.isNotBlank() }
     val selectedStatDisplayType by viewModel.selectedStatDisplayType.collectAsStateWithLifecycle()
     val subEmotionStats by viewModel.subEmotionStats.collectAsStateWithLifecycle()
     val pieChartSegments by viewModel.pieChartSegments.collectAsStateWithLifecycle()
+    val graphState by viewModel.emotionGraphState.collectAsStateWithLifecycle()
+    val storyInsightsState by viewModel.emotionStoryInsightsState.collectAsStateWithLifecycle()
+    val serverCategoryStats by viewModel.serverEmotionCategoryStats.collectAsStateWithLifecycle()
+    val serverSubEmotionStats by viewModel.serverSubEmotionStats.collectAsStateWithLifecycle()
+    val serverPieSegments by viewModel.serverPieChartSegments.collectAsStateWithLifecycle()
+    val serverRangeText by viewModel.serverGraphDateRangeText.collectAsStateWithLifecycle()
+    val displayedCategoryStats = serverCategoryStats
+    val displayedSubEmotionStats = serverSubEmotionStats
+    val displayedPieSegments = serverPieSegments
+    val displayedRangeText = serverRangeText.ifBlank { selectedDateRangeText }
+    val canExportGraph = !graphState.isLoading && graphState.error == null && graphState.response != null
     val chartPicture = remember { Picture() }
+
+    LaunchedEffect(Unit) { viewModel.setChartRange(ChartTimeRange.WEEK) }
 
     val filteredStories = remember(innerStories, selectedRange) {
         val today = viewModel.getTodayDateString()
@@ -175,15 +208,15 @@ fun EmotionDiaryScreen(
                     Column(
                         modifier = Modifier.padding(20.dp)
                     ) {
-                        Text(
-                            text = "3. 감정 다이어리 (올림픽 원형 기간별 그래프)",
+                        if (showPageTitle) Text(
+                            text = "감정그래프",
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        if (showPageTitle) Spacer(modifier = Modifier.height(6.dp))
                         Text(
-                            text = "원하는 기간을 선택하여 7가지 내면 감정(희노애락애오욕)의 발생 횟수에 따라 크기가 변화하는 올림픽 원형 그래프로 감정 변화를 확인해보세요.",
+                            text = "기간별 감정 기록을 7감정 버블과 세부 통계로 확인해보세요.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -192,19 +225,38 @@ fun EmotionDiaryScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                TabRow(selectedTabIndex = if (graphState.scope == GraphScope.ALL) 0 else 1) {
+                    Tab(selected = graphState.scope == GraphScope.ALL, onClick = {
+                        selectedStory = null
+                        viewModel.setChartRange(ChartTimeRange.WEEK)
+                    }, text = { Text("전체 감정") })
+                    Tab(selected = graphState.scope == GraphScope.STORY, onClick = {
+                        viewModel.enterStoryGraphScope()
+                    }, text = { Text("나의 사연별 감정") })
+                }
+                if (graphState.scope == GraphScope.STORY) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(onClick = { showStoryPicker = true }, modifier = Modifier.fillMaxWidth()) {
+                        Text(selectedStory?.let { "${it.title} · ${it.period}" } ?: "사연 선택 ▼")
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+
                 // Chart Range Selector FlowRow
                 FlowRow(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    ChartTimeRange.entries.forEach { range ->
+                    ChartTimeRange.entries.filter { it != ChartTimeRange.FAVORITES }.forEach { range ->
                         val isSelected = selectedRange == range
                         FilterChip(
                             selected = isSelected,
                             onClick = {
                                 if (range == ChartTimeRange.CUSTOM) {
                                     showCustomDateDialog = true
+                                } else if (graphState.scope == GraphScope.STORY) {
+                                    selectedStory?.let { viewModel.loadStoryEmotionGraph(it.storyId, range) }
                                 } else {
                                     viewModel.setChartRange(range)
                                 }
@@ -259,50 +311,165 @@ fun EmotionDiaryScreen(
 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                if (selectedStatDisplayType == StatDisplayType.CATEGORY) {
-                    // 7 Olympic Interlocking Rings Chart
+                if (graphState.scope == GraphScope.STORY && selectedStory == null) {
+                    Box(modifier = Modifier.fillMaxWidth().height(220.dp), contentAlignment = Alignment.Center) {
+                        Text("감정그래프를 확인할 사연을 선택해주세요.")
+                    }
+                } else if (graphState.isLoading) {
+                    Box(modifier = Modifier.fillMaxWidth().height(260.dp), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else if (graphState.error != null) {
+                    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(graphState.error.orEmpty(), color = MaterialTheme.colorScheme.error)
+                        TextButton(onClick = {
+                            if (graphState.scope == GraphScope.STORY) {
+                                selectedStory?.let { viewModel.loadStoryEmotionGraph(it.storyId, selectedRange) }
+                            } else {
+                                viewModel.loadEmotionGraph(selectedRange)
+                            }
+                        }) { Text("다시 시도") }
+                    }
+                } else if (selectedStatDisplayType == StatDisplayType.CATEGORY) {
                     EmotionOlympicRingsChart(
-                        stats = emotionCategoryStats,
-                        selectedDateRangeText = selectedDateRangeText,
-                        userNickname = userNickname,
+                        stats = displayedCategoryStats,
+                        selectedDateRangeText = displayedRangeText,
+                        userNickname = graphNickname,
+                        showNickname = includeNicknameInShare,
                         picture = chartPicture,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    EmotionPieChart(
-                        segments = pieChartSegments,
+                        selectedCategoryCode = storyInsightsState.selectedCategoryCode,
+                        onCategorySelected = { stat ->
+                            if (stat == null) viewModel.clearEmotionStoryInsights()
+                            else viewModel.loadEmotionStoryInsights(
+                                categoryCode = stat.category.code,
+                                label = stat.categoryLabel,
+                                count = stat.count,
+                                period = graphState.response?.period,
+                                storyId = graphState.story?.storyId
+                            )
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
                 } else {
                     SubEmotionPieChart(
-                        subEmotionStats = subEmotionStats,
+                        subEmotionStats = displayedSubEmotionStats,
+                        selectedDateRangeText = displayedRangeText,
+                        userNickname = graphNickname,
+                        showNickname = includeNicknameInShare,
+                        picture = chartPicture,
+                        selectedEmotionId = storyInsightsState.selectedEmotionId,
+                        onEmotionSelected = { stat ->
+                            if (stat == null) viewModel.clearEmotionStoryInsights()
+                            else stat.emotionId?.let { emotionId ->
+                                viewModel.loadEmotionStoryInsights(
+                                    emotionId = emotionId,
+                                    label = stat.emotionName,
+                                    count = stat.count,
+                                    period = graphState.response?.period,
+                                    storyId = graphState.story?.storyId
+                                )
+                            }
+                        },
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                // Action Bar: Image Export & Social Share Buttons
+                if (selectedStatDisplayType == StatDisplayType.CATEGORY && storyInsightsState.selectedCategoryCode != null) {
+                    val selectedCategory = displayedCategoryStats.firstOrNull {
+                        it.category.code == storyInsightsState.selectedCategoryCode
+                    }
+                    EmotionStoryInsightsPanel(
+                        state = storyInsightsState,
+                        selectionColor = selectedCategory?.color ?: MaterialTheme.colorScheme.primary,
+                        onRetry = {
+                            viewModel.loadEmotionStoryInsights(
+                                categoryCode = storyInsightsState.selectedCategoryCode,
+                                label = storyInsightsState.selectedLabel,
+                                count = storyInsightsState.selectedCount,
+                                period = graphState.response?.period,
+                                storyId = graphState.story?.storyId
+                            )
+                        },
+                        onOpenStory = onOpenStoryDetail
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
+                if (selectedStatDisplayType == StatDisplayType.SUB_EMOTION && storyInsightsState.selectedEmotionId != null) {
+                    val selectedSubEmotion = displayedSubEmotionStats.firstOrNull {
+                        it.emotionId == storyInsightsState.selectedEmotionId
+                    }
+                    EmotionStoryInsightsPanel(
+                        state = storyInsightsState,
+                        selectionColor = selectedSubEmotion?.color ?: MaterialTheme.colorScheme.primary,
+                        parentLabel = selectedSubEmotion?.categoryLabel,
+                        onRetry = {
+                            viewModel.loadEmotionStoryInsights(
+                                emotionId = storyInsightsState.selectedEmotionId,
+                                label = storyInsightsState.selectedLabel,
+                                count = storyInsightsState.selectedCount,
+                                period = graphState.response?.period,
+                                storyId = graphState.story?.storyId
+                            )
+                        },
+                        onOpenStory = onOpenStoryDetail
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = includeNicknameInShare,
+                        onCheckedChange = { includeNicknameInShare = it }
+                    )
+                    Text(
+                        text = "공유 이미지에 닉네임 표시",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                if (graphState.scope == GraphScope.STORY) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = includeStoryTitleInShare, onCheckedChange = { includeStoryTitleInShare = it })
+                        Text("공유 이미지에 사연 제목 표시", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+
+                // Action Bar: Image Export, Share and Link Copy
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     // Image Export Button
                     Button(
+                        enabled = canExportGraph,
                         onClick = {
+                            if (BuildConfig.DEBUG) Log.d("WOOCHISO_GRAPH", "GRAPH_IMAGE_SAVE_CLICK")
                             val bitmap = captureChartBitmap()
                             if (bitmap != null) {
-                                ShareUtils.saveBitmapToGallery(context, bitmap, "EmotionDiaryChart")
+                                if (BuildConfig.DEBUG) Log.d("WOOCHISO_GRAPH", "GRAPH_IMAGE_CAPTURE_SUCCESS")
+                                val saved = ShareUtils.saveBitmapToGallery(context, bitmap, "WoochisoEmotionGraph")
+                                if (saved) {
+                                    if (BuildConfig.DEBUG) Log.d("WOOCHISO_GRAPH", "GRAPH_IMAGE_SAVE_SUCCESS")
+                                    Toast.makeText(context, "감정그래프 이미지가 저장되었습니다.", Toast.LENGTH_SHORT).show()
+                                } else {
+                                    Toast.makeText(context, "이미지를 저장하지 못했습니다.", Toast.LENGTH_SHORT).show()
+                                }
                             } else {
-                                Toast.makeText(context, "차트 캡처 실패", Toast.LENGTH_SHORT).show()
+                                if (BuildConfig.DEBUG) Log.d("WOOCHISO_GRAPH", "GRAPH_IMAGE_SAVE_FAILED reason=capture_unavailable")
+                                Toast.makeText(context, "이미지를 저장하지 못했습니다.", Toast.LENGTH_SHORT).show()
                             }
                         },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
+                            containerColor = com.example.ui.theme.AppActionButton,
+                            contentColor = Color.White
                         )
                     ) {
                         Icon(
@@ -310,56 +477,91 @@ fun EmotionDiaryScreen(
                             contentDescription = "Save Chart Image",
                             modifier = Modifier.size(18.dp)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("이미지로 저장")
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("이미지 저장", style = MaterialTheme.typography.labelSmall)
                     }
 
                     // Social Share Button
                     OutlinedButton(
+                        enabled = canExportGraph,
                         onClick = {
                             val bitmap = captureChartBitmap()
                             val summaryText = buildString {
-                                val namePrefix = if (!userNickname.isNullOrBlank()) "${userNickname}님의 " else ""
-                                append("📖 [${namePrefix}감정 다이어리 원형 그래프 리포트]\n")
-                                append("기간: $selectedDateRangeText\n\n")
+                                val namePrefix = if (includeNicknameInShare && !graphNickname.isNullOrBlank()) "${graphNickname}님의 " else ""
+                                val graphTitle = if (graphState.scope == GraphScope.STORY) {
+                                    if (includeStoryTitleInShare) selectedStory?.title ?: "선택한 사연" else "선택한 사연의 감정그래프"
+                                } else "감정그래프"
+                                append("📖 [${namePrefix}${graphTitle}]\n")
+                                append("기간: $displayedRangeText\n\n")
                                 append("감정 발생 분포:\n")
-                                emotionCategoryStats.forEach { stat ->
-                                    append("- ${stat.category.hanja} ${stat.category.koreanLabel}: ${stat.count}회 (${String.format("%.1f", stat.percentage)}%)\n")
+                                displayedCategoryStats.forEach { stat ->
+                                    append("- ${stat.categoryLabel}: ${stat.count}회 (${String.format("%.1f", stat.percentage)}%)\n")
                                 }
-                                append("\n#감정다이어리 #우치소 #희노애락애오욕 #감정원형그래프")
+                                append("\n#감정그래프 #우치소 #희노애락애오욕")
                             }
                             ShareUtils.shareEmotionDiary(context, summaryText, bitmap)
                         },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(16.dp)
+                        shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Share,
                             contentDescription = "Share on Social",
                             modifier = Modifier.size(18.dp)
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("소셜 공유")
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("공유하기", style = MaterialTheme.typography.labelSmall)
+                    }
+
+                    OutlinedButton(
+                        enabled = canExportGraph,
+                        onClick = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            clipboard.setPrimaryClip(ClipData.newPlainText("우치소 링크", "https://woochiso.com/"))
+                            Toast.makeText(context, "우치소 링크를 복사했습니다.", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Link,
+                            contentDescription = "Copy Woochiso Link",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("링크 복사", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+
+                if (canExportGraph) {
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    EmotionPieChart(
+                        segments = displayedPieSegments,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    EmotionTrendChart(
+                        dailySeries = graphState.response?.dailySeries.orEmpty(),
+                        categories = displayedCategoryStats,
+                        included = graphState.response?.dailySeriesIncluded == true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    if (graphState.scope == GraphScope.STORY && selectedStory != null && graphState.response?.totalCount == 0) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("아직 이 사연과 연결된 감정 기록이 없습니다.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
 
                 Spacer(modifier = Modifier.height(20.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "해당 기간 감정 기록일지 (${diaryEntries.size}개)",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
             }
+
+            // 감정그래프 화면은 서버 그래프와 공유 영역까지만 표시한다.
+            // Room 데이터는 유지하되 기존 일지/사연 목록을 이 화면에는 붙이지 않는다.
+            return@LazyColumn
 
             if (diaryEntries.isEmpty()) {
                 item {
@@ -370,7 +572,7 @@ fun EmotionDiaryScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "작성된 감정 다이어리가 없습니다.\n하단 (+) 버튼을 눌러 오늘 느낀 감정을 작성해보세요.",
+                            text = "작성된 감정 다이어리가 없습니다.\n즐찾감정에서 오늘 느낀 감정을 기록해보세요.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.outline
                         )
@@ -691,19 +893,6 @@ fun EmotionDiaryScreen(
             }
         }
 
-        // FAB to add new diary entry
-        FloatingActionButton(
-            onClick = { showAddEntryDialog = true },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(24.dp),
-            containerColor = MaterialTheme.colorScheme.primary
-        ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = "Add Diary Entry"
-            )
-        }
     }
 
     // Modal Dialog to write new Diary Entry
@@ -804,6 +993,10 @@ fun EmotionDiaryScreen(
             },
             confirmButton = {
                 Button(
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = com.example.ui.theme.AppActionButton,
+                        contentColor = Color.White
+                    ),
                     onClick = {
                         val emotionsToSave = if (selectedEmotions.isEmpty()) listOf(primaryCat.koreanLabel) else selectedEmotions.toList()
                         viewModel.addDiaryEntry(
@@ -824,6 +1017,32 @@ fun EmotionDiaryScreen(
                     Text("취소")
                 }
             }
+        )
+    }
+
+    if (showStoryPicker) {
+        AlertDialog(
+            onDismissRequest = { showStoryPicker = false },
+            title = { Text("사연 선택") },
+            text = {
+                if (serverStories.isEmpty()) {
+                    Text("등록된 나의 사연이 없습니다.")
+                } else {
+                    LazyColumn(modifier = Modifier.height(320.dp)) {
+                        items(serverStories, key = { it.storyId }) { story ->
+                            TextButton(
+                                onClick = {
+                                    selectedStory = story
+                                    showStoryPicker = false
+                                    viewModel.loadStoryEmotionGraph(story.storyId, ChartTimeRange.WEEK)
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text("${story.title} · ${story.period}") }
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { showStoryPicker = false }) { Text("닫기") } }
         )
     }
 
@@ -917,11 +1136,19 @@ fun EmotionDiaryScreen(
             },
             confirmButton = {
                 Button(
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = com.example.ui.theme.AppActionButton,
+                        contentColor = Color.White
+                    ),
                     onClick = {
                         val s = startDateInput.trim()
                         val e = endDateInput.trim()
                         if (s.isNotBlank() && e.isNotBlank()) {
-                            viewModel.setCustomDateRange(s, e)
+                            if (graphState.scope == GraphScope.STORY) {
+                                selectedStory?.let { viewModel.loadStoryEmotionGraph(it.storyId, ChartTimeRange.CUSTOM, s, e) }
+                            } else {
+                                viewModel.setCustomDateRange(s, e)
+                            }
                         }
                         showCustomDateDialog = false
                     }

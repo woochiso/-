@@ -35,6 +35,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -46,6 +47,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,6 +59,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.model.EmotionCategory
 import com.example.data.model.EmotionWordItem
 import com.example.ui.viewmodel.EmotionViewModel
@@ -65,12 +68,17 @@ import com.example.ui.viewmodel.EmotionViewModel
 @Composable
 fun HumanEmotionsScreen(
     viewModel: EmotionViewModel,
-    emotionsList: List<EmotionWordItem>,
     selectedCategory: EmotionCategory?,
+    showPageTitle: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var selectedEmotionForLog by remember { mutableStateOf<EmotionWordItem?>(null) }
+    val masterState by viewModel.humanEmotionsState.collectAsStateWithLifecycle()
+    val emotionsList = if (selectedCategory == null) masterState.emotions
+        else masterState.emotions.filter { it.category == selectedCategory }
+
+    LaunchedEffect(Unit) { viewModel.loadHumanEmotions() }
 
     Column(
         modifier = modifier
@@ -91,13 +99,13 @@ fun HumanEmotionsScreen(
             Column(
                 modifier = Modifier.padding(20.dp)
             ) {
-                Text(
+                if (showPageTitle) Text(
                     text = "1. 인간의 감정 (7가지 근본 감정)",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
-                Spacer(modifier = Modifier.height(6.dp))
+                if (showPageTitle) Spacer(modifier = Modifier.height(6.dp))
                 Text(
                     text = "아래 감정 버튼을 터치하여 희(喜)·노(怒)·애(哀)·락(樂)·애(愛)·오(惡)·욕(慾) 7가지 내면 감정을 구경하고 즐겨찾기(⭐)로 저장해보세요.",
                     style = MaterialTheme.typography.bodyMedium,
@@ -161,7 +169,8 @@ fun HumanEmotionsScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    EmotionCategory.entries.forEach { category ->
+                    masterState.categories.forEach { serverCategory ->
+                        val category = serverCategory.category
                         val isSelected = selectedCategory == category
                         Surface(
                             modifier = Modifier
@@ -206,7 +215,28 @@ fun HumanEmotionsScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         // Emotion Words Grid/List
-        if (emotionsList.isEmpty()) {
+        if (masterState.isLoading && masterState.emotions.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator()
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text("감정 목록을 불러오는 중...")
+                }
+            }
+        } else if (masterState.error != null && masterState.emotions.isEmpty()) {
+            Box(
+                modifier = Modifier.fillMaxSize().padding(32.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(masterState.error.orEmpty(), color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = viewModel::loadHumanEmotions) { Text("다시 시도") }
+                }
+            }
+        } else if (emotionsList.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -265,8 +295,11 @@ fun HumanEmotionsScreen(
                                     )
                                 }
                                 Spacer(modifier = Modifier.height(4.dp))
+                                val categoryDescription = masterState.categories.firstOrNull {
+                                    it.category == category
+                                }?.description ?: category.description
                                 Text(
-                                    text = category.description,
+                                    text = categoryDescription,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -314,11 +347,9 @@ fun HumanEmotionsScreen(
                                                 Spacer(modifier = Modifier.width(4.dp))
                                                 IconButton(
                                                     onClick = {
-                                                        viewModel.toggleFavorite(
-                                                            emotion.word,
-                                                            emotion.category.code
-                                                        )
+                                                        emotion.emotionId?.let(viewModel::toggleServerFavorite)
                                                     },
+                                                    enabled = emotion.emotionId != null && emotion.emotionId !in masterState.savingEmotionIds,
                                                     modifier = Modifier.size(28.dp)
                                                 ) {
                                                     Icon(
@@ -368,7 +399,7 @@ fun HumanEmotionsScreen(
                 ) {
                     TextButton(
                         onClick = {
-                            viewModel.toggleFavorite(emotion.word, emotion.category.code)
+                            emotion.emotionId?.let(viewModel::toggleServerFavorite)
                             selectedEmotionForLog = null
                         }
                     ) {
@@ -376,6 +407,10 @@ fun HumanEmotionsScreen(
                     }
 
                     Button(
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            containerColor = com.example.ui.theme.AppActionButton,
+                            contentColor = androidx.compose.ui.graphics.Color.White
+                        ),
                         onClick = {
                             viewModel.addDiaryEntry(
                                 dateString = viewModel.getTodayDateString(),

@@ -239,7 +239,8 @@ fun OnboardingNicknameScreen(
                             .height(52.dp),
                         shape = RoundedCornerShape(18.dp),
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary
+                            containerColor = com.example.ui.theme.AppActionButton,
+                            contentColor = Color.White
                         )
                     ) {
                         Text(

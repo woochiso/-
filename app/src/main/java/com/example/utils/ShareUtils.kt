@@ -8,11 +8,14 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.media.MediaScannerConnection
+import android.util.Log
 import android.widget.Toast
 import androidx.core.content.FileProvider
+import com.example.BuildConfig
 import java.io.File
 import java.io.FileOutputStream
-import java.io.OutputStream
+import java.io.IOException
 
 
 enum class SocialPlatform(
@@ -85,44 +88,61 @@ object ShareUtils {
     }
 
     fun saveBitmapToGallery(context: Context, bitmap: Bitmap, title: String): Boolean {
-        var outputStream: OutputStream? = null
-        var success = false
+        val filename = "${title}_${System.currentTimeMillis()}.png"
+        var insertedUri: Uri? = null
 
-        try {
-            val filename = "${title}_${System.currentTimeMillis()}.png"
-
+        return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                val contentValues = ContentValues().apply {
-                    put(MediaStore.MediaColumns.DISPLAY_NAME, filename)
-                    put(MediaStore.MediaColumns.MIME_TYPE, "image/png")
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/EmotionDiary")
+                val resolver = context.contentResolver
+                val values = ContentValues().apply {
+                    put(MediaStore.Images.Media.DISPLAY_NAME, filename)
+                    put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                    put(MediaStore.Images.Media.RELATIVE_PATH, "${Environment.DIRECTORY_PICTURES}/Woochiso")
+                    put(MediaStore.Images.Media.IS_PENDING, 1)
                 }
-                val imageUri = context.contentResolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, contentValues)
-                if (imageUri != null) {
-                    outputStream = context.contentResolver.openOutputStream(imageUri)
-                }
-            } else {
-                val imagesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
-                val emotionFolder = File(imagesDir, "EmotionDiary")
-                if (!emotionFolder.exists()) {
-                    emotionFolder.mkdirs()
-                }
-                val imageFile = File(emotionFolder, filename)
-                outputStream = FileOutputStream(imageFile)
-            }
+                insertedUri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values)
+                    ?: throw IOException("MediaStore insert returned null")
+                resolver.openOutputStream(insertedUri!!, "w")?.use { stream ->
+                    if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
+                        throw IOException("Bitmap compression failed")
+                    }
+                    stream.flush()
+                } ?: throw IOException("MediaStore output stream unavailable")
 
-            if (outputStream != null) {
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
-                outputStream.flush()
-                outputStream.close()
-                success = true
-                Toast.makeText(context, "갤러리에 감정 그래프 이미지가 저장되었습니다.", Toast.LENGTH_SHORT).show()
+                resolver.update(
+                    insertedUri!!,
+                    ContentValues().apply { put(MediaStore.Images.Media.IS_PENDING, 0) },
+                    null,
+                    null
+                )
+            } else {
+                val pictures = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+                val woochisoFolder = File(pictures, "Woochiso")
+                if (!woochisoFolder.exists() && !woochisoFolder.mkdirs()) {
+                    throw IOException("Pictures directory unavailable")
+                }
+                val imageFile = File(woochisoFolder, filename)
+                FileOutputStream(imageFile).use { stream ->
+                    if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
+                        throw IOException("Bitmap compression failed")
+                    }
+                    stream.flush()
+                }
+                MediaScannerConnection.scanFile(
+                    context,
+                    arrayOf(imageFile.absolutePath),
+                    arrayOf("image/png"),
+                    null
+                )
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            Toast.makeText(context, "이미지 저장 실패: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
+            true
+        } catch (error: Exception) {
+            insertedUri?.let { runCatching { context.contentResolver.delete(it, null, null) } }
+            if (BuildConfig.DEBUG) {
+                Log.e("WOOCHISO_GRAPH", "GRAPH_IMAGE_SAVE_FAILED reason=${error.javaClass.simpleName}")
+            }
+            false
         }
-        return success
     }
 
     fun shareEmotionDiary(context: Context, text: String, bitmap: Bitmap?) {

@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.data.local.dao.DiaryEntryDao
 import com.example.data.local.dao.EmotionCategoryDao
@@ -35,7 +36,7 @@ import java.util.Locale
         DiaryEntryEntity::class,
         InnerStoryEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -58,11 +59,24 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "emotion_diary_database"
                 )
-                    .fallbackToDestructiveMigration()
+                    .addMigrations(MIGRATION_4_5)
                     .addCallback(DatabaseCallback())
                     .build()
                 INSTANCE = instance
                 instance
+            }
+        }
+
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE inner_stories ADD COLUMN eventPeriod TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE inner_stories ADD COLUMN eventAge INTEGER")
+                db.execSQL("ALTER TABLE inner_stories ADD COLUMN eventYear INTEGER")
+                db.execSQL("ALTER TABLE inner_stories ADD COLUMN eventCategory TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE inner_stories ADD COLUMN relatedPerson TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE inner_stories ADD COLUMN importance INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE inner_stories ADD COLUMN currentImpact INTEGER NOT NULL DEFAULT 1")
+                db.execSQL("ALTER TABLE inner_stories ADD COLUMN currentStatus TEXT NOT NULL DEFAULT ''")
             }
         }
 

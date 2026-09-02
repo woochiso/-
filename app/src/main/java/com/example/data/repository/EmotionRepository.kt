@@ -12,6 +12,7 @@ import com.example.data.local.entity.EmotionItemEntity
 import com.example.data.local.entity.EmotionRecordEntity
 import com.example.data.local.entity.FavoriteEmotionEntity
 import com.example.data.local.entity.InnerStoryEntity
+import com.example.data.remote.dto.FavoriteEmotionServerDto
 import kotlinx.coroutines.flow.Flow
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -25,6 +26,22 @@ class EmotionRepository(
     private val emotionItemDao: EmotionItemDao,
     private val emotionRecordDao: EmotionRecordDao
 ) {
+    suspend fun syncFavoriteCache(serverFavorites: List<FavoriteEmotionServerDto>, recordDate: String) {
+        serverFavorites.forEach { server ->
+            val cached = favoriteEmotionDao.getFavoriteByWord(server.emotionName)
+            val value = FavoriteEmotionEntity(
+                id = cached?.id ?: 0,
+                word = server.emotionName,
+                categoryCode = server.categoryCode,
+                countToday = server.todayCount,
+                countTotal = server.totalCount,
+                lastUpdatedDate = recordDate,
+                connectedStoryTitle = cached?.connectedStoryTitle
+            )
+            if (cached == null) favoriteEmotionDao.insertFavorite(value)
+            else favoriteEmotionDao.updateFavorite(value)
+        }
+    }
     val allFavorites: Flow<List<FavoriteEmotionEntity>> = favoriteEmotionDao.getAllFavorites()
     val allDiaryEntries: Flow<List<DiaryEntryEntity>> = diaryEntryDao.getAllEntries()
     val allInnerStories: Flow<List<InnerStoryEntity>> = innerStoryDao.getAllStories()
@@ -375,7 +392,15 @@ class EmotionRepository(
         reflection: String,
         primaryCategoryCode: String,
         associatedEmotionsList: List<String>,
-        dateString: String
+        dateString: String,
+        eventPeriod: String = "",
+        eventAge: Int? = null,
+        eventYear: Int? = null,
+        eventCategory: String = "",
+        relatedPerson: String = "",
+        importance: Int = 1,
+        currentImpact: Int = 1,
+        currentStatus: String = ""
     ) {
         val story = InnerStoryEntity(
             title = title,
@@ -384,6 +409,14 @@ class EmotionRepository(
             primaryCategoryCode = primaryCategoryCode,
             associatedEmotionsCsv = associatedEmotionsList.joinToString(", "),
             dateString = dateString,
+            eventPeriod = eventPeriod,
+            eventAge = eventAge,
+            eventYear = eventYear,
+            eventCategory = eventCategory,
+            relatedPerson = relatedPerson,
+            importance = importance,
+            currentImpact = currentImpact,
+            currentStatus = currentStatus,
             createdAt = System.currentTimeMillis()
         )
         innerStoryDao.insertStory(story)
