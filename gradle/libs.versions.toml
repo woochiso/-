@@ -1,4 +1,5 @@
 [versions]
+androidYoutubePlayer = "13.0.0"
 desugarJdkLibs = "2.1.5"
 agp = "9.1.1"
 coreKtx = "1.18.0"
@@ -45,6 +46,7 @@ googleid = "1.1.1"
 
 
 [libraries]
+android-youtube-player = { module = "com.pierfrancescosoffritti.androidyoutubeplayer:core", version.ref = "androidYoutubePlayer" }
 desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugarJdkLibs" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }

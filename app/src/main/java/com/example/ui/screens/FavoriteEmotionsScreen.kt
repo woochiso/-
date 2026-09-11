@@ -10,13 +10,18 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -37,6 +42,7 @@ import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
@@ -640,45 +646,61 @@ fun FavoriteEmotionsScreen(
         var relevanceLevel by remember(options?.selected?.linkStrength, fav.emotionId) {
             mutableStateOf(options?.selected?.linkStrength)
         }
-        var validationMessage by remember { mutableStateOf<String?>(null) }
+        var validationMessage by remember(fav.emotionId) { mutableStateOf<String?>(null) }
 
-        AlertDialog(
+        ModalBottomSheet(
             onDismissRequest = {
-                selectedFavForStory = null
-                viewModel.clearEmotionStory()
+                if (!storyState.isSaving) {
+                    selectedFavForStory = null
+                    viewModel.clearEmotionStory()
+                }
             },
-            title = {
+            dragHandle = null,
+            modifier = Modifier.fillMaxHeight(0.92f),
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Fixed header
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 20.dp, end = 8.dp, top = 16.dp, bottom = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "이 감정이 어떤 기억과 관련되어 있나요?",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = {
-                        selectedFavForStory = null
-                        viewModel.clearEmotionStory()
-                    }) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "이 감정이 어떤 기억과 관련되어 있나요?",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = options?.record?.let { "${it.categoryLabel} · ${it.emotionName} · 오늘 ${it.count}회" }
+                                ?: "${fav.categoryLabel} · ${fav.emotionName}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = serverColor
+                        )
+                    }
+                    IconButton(
+                        enabled = !storyState.isSaving,
+                        onClick = {
+                            selectedFavForStory = null
+                            viewModel.clearEmotionStory()
+                        }
+                    ) {
                         Icon(Icons.Default.Close, contentDescription = "닫기")
                     }
                 }
-            },
-            text = {
-                Column(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = options?.record?.let { "${it.categoryLabel} · ${it.emotionName} · 오늘 ${it.count}회" }
-                            ?: "${fav.categoryLabel} · ${fav.emotionName}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = serverColor
-                    )
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                // Only the content area scrolls; the header and actions stay visible.
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp, vertical = 8.dp)
+                ) {
                     if (storyState.isLoading) {
                         Box(modifier = Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
                             CircularProgressIndicator()
@@ -689,13 +711,8 @@ fun FavoriteEmotionsScreen(
                             TextButton(onClick = { viewModel.loadEmotionStoryOptions(fav.emotionId) }) { Text("다시 시도") }
                         }
                     } else if (options != null && options.stories.isNotEmpty()) {
-                        LazyColumn(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(200.dp),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            items(options.stories, key = { it.storyId }) { story ->
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            options.stories.forEach { story ->
                                 val isSelected = selectedStoryId == story.storyId
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
@@ -708,7 +725,10 @@ fun FavoriteEmotionsScreen(
                                         width = if (isSelected) 2.dp else 1.dp,
                                         color = if (isSelected) Color(0xFF74AFDD) else MaterialTheme.colorScheme.outline
                                     ),
-                                    onClick = { selectedStoryId = story.storyId }
+                                    onClick = {
+                                        selectedStoryId = story.storyId
+                                        validationMessage = null
+                                    }
                                 ) {
                                     Row(
                                         modifier = Modifier
@@ -718,7 +738,10 @@ fun FavoriteEmotionsScreen(
                                     ) {
                                         RadioButton(
                                             selected = isSelected,
-                                            onClick = { selectedStoryId = story.storyId }
+                                            onClick = {
+                                                selectedStoryId = story.storyId
+                                                validationMessage = null
+                                            }
                                         )
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Text(
@@ -741,7 +764,7 @@ fun FavoriteEmotionsScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     Text("관련 정도", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                     Spacer(modifier = Modifier.height(8.dp))
-                    if (showPageTitle) Row(
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
@@ -768,32 +791,21 @@ fun FavoriteEmotionsScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                     }
+                    Spacer(modifier = Modifier.height(12.dp))
                 }
-            },
-            confirmButton = {
-                Button(
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = com.example.ui.theme.AppActionButton,
-                        contentColor = androidx.compose.ui.graphics.Color.White
-                    ),
-                    onClick = {
-                        when {
-                            selectedStoryId == null -> validationMessage = "연결할 사연을 선택해주세요."
-                            relevanceLevel == null -> validationMessage = "관련 정도를 선택해주세요."
-                            else -> {
-                                viewModel.linkEmotionStory(fav.emotionId, selectedStoryId!!, relevanceLevel!!) {
-                                    selectedFavForStory = null
-                                    viewModel.clearEmotionStory()
-                                }
-                            }
-                        }
-                    }
+
+                // Fixed footer actions
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("연결 저장")
-                }
-            },
-            dismissButton = {
                 OutlinedButton(
+                    enabled = !storyState.isSaving,
+                    modifier = Modifier.weight(1f),
                     onClick = {
                         selectedFavForStory = null
                         viewModel.clearEmotionStory()
@@ -802,7 +814,33 @@ fun FavoriteEmotionsScreen(
                 ) {
                     Text("+ 새로운 사연 등록")
                 }
+                    Button(
+                        modifier = Modifier.weight(1f),
+                        enabled = selectedStoryId != null && !storyState.isSaving,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = com.example.ui.theme.AppActionButton,
+                            contentColor = Color.White
+                        ),
+                        onClick = {
+                            if (relevanceLevel == null) {
+                                validationMessage = "관련 정도를 선택해주세요."
+                            } else {
+                                viewModel.linkEmotionStory(fav.emotionId, selectedStoryId!!, relevanceLevel!!) {
+                                    selectedFavForStory = null
+                                    viewModel.clearEmotionStory()
+                                }
+                            }
+                        }
+                    ) {
+                        if (storyState.isSaving) {
+                            CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Color.White)
+                        } else {
+                            Text("연결 저장")
+                        }
+                    }
+                }
             }
-        )
+        }
     }
 }
+

@@ -56,6 +56,9 @@ interface ApiService {
     @GET("support/index.php")
     suspend fun searchSupport(@Query("q") query: String): Response<SupportSearchResponse>
 
+    @GET("help/videos.php")
+    suspend fun getHelpVideos(): Response<HelpVideosResponse>
+
     @GET("support/notices.php")
     suspend fun getSupportNotices(
         @Query("q") query: String? = null,

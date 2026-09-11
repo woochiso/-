@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.OndemandVideo
 import androidx.compose.material.icons.filled.LockReset
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -45,6 +46,7 @@ fun MyInfoScreen(
     onEditProfile: () -> Unit,
     onChangePassword: () -> Unit,
     onOpenSupport: () -> Unit,
+    onOpenHelpVideos: () -> Unit,
     onOpenAppInfo: () -> Unit,
     onLogout: () -> Unit
 ) {
@@ -110,6 +112,7 @@ fun MyInfoScreen(
         item { Spacer(modifier = Modifier.height(4.dp)) }
         item { MyInfoMenuCard("회원정보 수정", "닉네임과 회원정보를 관리합니다.", Icons.Default.Badge, onEditProfile) }
         item { MyInfoMenuCard("비밀번호 변경", "로그인 비밀번호를 변경합니다.", Icons.Default.LockReset, onChangePassword) }
+        item { MyInfoMenuCard("우치소 소개 및 사용방법", "소개와 사용방법 영상을 확인합니다.", Icons.Default.OndemandVideo, onOpenHelpVideos) }
         item { MyInfoMenuCard("고객센터", "공지사항, FAQ 및 문의를 확인합니다.", Icons.Default.Help, onOpenSupport) }
         item { MyInfoMenuCard("앱 정보", "감정다이어리 앱 정보를 확인합니다.", Icons.Default.Info, onOpenAppInfo) }
         item { Spacer(modifier = Modifier.height(4.dp)) }

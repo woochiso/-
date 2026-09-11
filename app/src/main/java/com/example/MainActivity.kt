@@ -98,6 +98,9 @@ import com.example.ui.screens.MyInfoScreen
 import com.example.ui.screens.EditProfileScreen
 import com.example.ui.screens.ChangePasswordScreen
 import com.example.ui.screens.CustomerCenterScreen
+import com.example.ui.screens.HelpVideosScreen
+import com.example.ui.screens.HelpVideoType
+import com.example.ui.screens.VideoPlayerScreen
 import com.example.ui.screens.OnboardingNicknameScreen
 import com.example.ui.viewmodel.AuthViewModel
 import com.example.ui.theme.EmotionDiaryTheme
@@ -109,6 +112,7 @@ import com.example.ui.viewmodel.StoryViewModel
 import com.example.ui.viewmodel.RecoveryViewModel
 import com.example.ui.viewmodel.AiEmotionAnalysisViewModel
 import com.example.ui.viewmodel.CounselingViewModel
+import com.example.ui.viewmodel.HelpVideoViewModel
 
 enum class NavTab(
     val title: String,
@@ -162,6 +166,7 @@ private enum class MyInfoDestination {
     MENU,
     EDIT_PROFILE,
     CHANGE_PASSWORD,
+    HELP_VIDEOS,
     SUPPORT,
     APP_INFO
 }
@@ -185,6 +190,7 @@ class MainActivity : ComponentActivity() {
     private val recoveryViewModel: RecoveryViewModel by viewModels()
     private val aiEmotionAnalysisViewModel: AiEmotionAnalysisViewModel by viewModels()
     private val counselingViewModel: CounselingViewModel by viewModels()
+    private val helpVideoViewModel: HelpVideoViewModel by viewModels()
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -328,6 +334,8 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 } else {
+                    val isHomeVideoDestination = selectedTabIndex == MainNavTab.HOME.ordinal &&
+                        (homeDestination == HomeDestination.INTRODUCTION || homeDestination == HomeDestination.GUIDE)
                     val mainAccentColor = if (selectedTabIndex == MainNavTab.HOME.ordinal) {
                         Color(0xFF74AFDD)
                     } else {
@@ -342,6 +350,7 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxSize(),
                         containerColor = MaterialTheme.colorScheme.background,
                         topBar = {
+                            if (!isHomeVideoDestination) {
                             TopAppBar(
                                 title = {
                                     Row(
@@ -423,8 +432,10 @@ class MainActivity : ComponentActivity() {
                                     containerColor = MaterialTheme.colorScheme.surface
                                 )
                             )
+                            }
                         },
                     bottomBar = {
+                        if (!isHomeVideoDestination) {
                         NavigationBar(
                             containerColor = MaterialTheme.colorScheme.surface,
                             windowInsets = NavigationBarDefaults.windowInsets
@@ -471,6 +482,7 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
                         }
+                        }
                     }
                 ) { innerPadding ->
                     Box(
@@ -495,8 +507,18 @@ class MainActivity : ComponentActivity() {
                                             selectedTabIndex = MainNavTab.AI_CARE.ordinal
                                         }
                                     )
-                                    HomeDestination.INTRODUCTION -> ChildDestination("우치소 소개", { homeDestination = HomeDestination.HOME }) { MainTabPlaceholder("우치소 소개", showTitle = false) }
-                                    HomeDestination.GUIDE -> ChildDestination("사용방법", { homeDestination = HomeDestination.HOME }) { MainTabPlaceholder("사용방법", showTitle = false) }
+                                    HomeDestination.INTRODUCTION -> VideoPlayerScreen(
+                                        videoType = HelpVideoType.INTRO,
+                                        title = "우치소 소개",
+                                        viewModel = helpVideoViewModel,
+                                        onBack = { homeDestination = HomeDestination.HOME }
+                                    )
+                                    HomeDestination.GUIDE -> VideoPlayerScreen(
+                                        videoType = HelpVideoType.EMOTION_DIARY,
+                                        title = "감정다이어리 사용법",
+                                        viewModel = helpVideoViewModel,
+                                        onBack = { homeDestination = HomeDestination.HOME }
+                                    )
                                     HomeDestination.HUMAN_EMOTIONS -> ChildDestination("인간의 감정", { homeDestination = HomeDestination.HOME }) { HumanEmotionsScreen(
                                         viewModel = viewModel,
                                         selectedCategory = selectedCategoryFilter,
@@ -605,6 +627,7 @@ class MainActivity : ComponentActivity() {
                                         grade = authState.session?.grade,
                                         onEditProfile = { myInfoDestination = MyInfoDestination.EDIT_PROFILE },
                                         onChangePassword = { myInfoDestination = MyInfoDestination.CHANGE_PASSWORD },
+                                        onOpenHelpVideos = { myInfoDestination = MyInfoDestination.HELP_VIDEOS },
                                         onOpenSupport = { myInfoDestination = MyInfoDestination.SUPPORT },
                                         onOpenAppInfo = { myInfoDestination = MyInfoDestination.APP_INFO },
                                         onLogout = authViewModel::logout
@@ -627,6 +650,7 @@ class MainActivity : ComponentActivity() {
                                         },
                                         showPageTitle = false
                                     ) }
+                                    MyInfoDestination.HELP_VIDEOS -> ChildDestination("사용방법 영상", { myInfoDestination = MyInfoDestination.MENU }) { HelpVideosScreen(helpVideoViewModel) }
                                     MyInfoDestination.SUPPORT -> CustomerCenterScreen(
                                         viewModel = supportViewModel,
                                         onAuthExpired = authViewModel::logout,
