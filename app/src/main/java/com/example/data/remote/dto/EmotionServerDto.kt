@@ -197,7 +197,64 @@ data class EmotionGraphResponse(
     val emotions: List<EmotionGraphEmotionDto> = emptyList(),
     val dailySeriesIncluded: Boolean = false,
     val dailySeries: List<Map<String, Any?>> = emptyList(),
+    val summary: EmotionGraphSummaryDto? = null,
+    val storyRatios: List<EmotionStoryRatioDto> = emptyList(),
+    val timeGraphs: List<EmotionTimeGraphDto> = emptyList(),
     val message: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class EmotionGraphTopEmotionDto(
+    val emotionId: Long? = null,
+    val emotionName: String,
+    val totalCount: Int
+)
+
+@JsonClass(generateAdapter = true)
+data class EmotionGraphSummaryDto(
+    val recordedEmotions: Int = 0,
+    val totalOccurrences: Int = 0,
+    val topEmotion: EmotionGraphTopEmotionDto? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class EmotionStoryRatioDto(
+    val storyId: Long,
+    val storyTitle: String,
+    val totalCount: Int,
+    val percentage: Double,
+    val color: String
+)
+
+@JsonClass(generateAdapter = true)
+data class EmotionTimeSeriesDto(
+    val categoryCode: String,
+    val categoryName: String,
+    val categoryLabel: String,
+    val color: String,
+    val values: List<Int> = emptyList(),
+    val totalCount: Int = 0
+)
+
+@JsonClass(generateAdapter = true)
+data class EmotionTimePeakEmotionDto(val label: String, val count: Int)
+
+@JsonClass(generateAdapter = true)
+data class EmotionTimeSummaryDto(
+    val peakLabel: String? = null,
+    val peakTotal: Int = 0,
+    val peakEmotion: EmotionTimePeakEmotionDto? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class EmotionTimeGraphDto(
+    val mode: String,
+    val labels: List<String> = emptyList(),
+    val series: List<EmotionTimeSeriesDto> = emptyList(),
+    val hasData: Boolean = false,
+    val recordCount: Int = 0,
+    val collectionStart: String? = null,
+    val summary: EmotionTimeSummaryDto? = null
 )
 
 @JsonClass(generateAdapter = true)

@@ -14,7 +14,6 @@ data class GoogleAuthResponse(
 )
 data class GoogleSignupRequest(
     val idToken: String,
-    val phoneNumber: String,
     val nickname: String,
     val birthYear: Int,
     val gender: String,

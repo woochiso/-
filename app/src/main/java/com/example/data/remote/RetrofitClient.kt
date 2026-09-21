@@ -4,6 +4,9 @@ import com.example.BuildConfig
 import com.squareup.moshi.Moshi
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import okhttp3.OkHttpClient
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.HttpUrl
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
@@ -17,6 +20,7 @@ object RetrofitClient {
         .build()
 
     private val httpClient = OkHttpClient.Builder()
+        .cookieJar(sessionCookies)
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .writeTimeout(20, TimeUnit.SECONDS)
@@ -51,3 +55,14 @@ object RetrofitClient {
             .create(ApiService::class.java)
     }
 }
+    private val sessionCookies = object : CookieJar {
+        private val cookies = mutableMapOf<String, Cookie>()
+        override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) {
+            synchronized(this) { cookies.forEach { this.cookies[it.name] = it } }
+        }
+        override fun loadForRequest(url: HttpUrl): List<Cookie> =
+            synchronized(this) {
+                val now = System.currentTimeMillis()
+                cookies.values.filter { it.expiresAt > now && it.matches(url) }
+            }
+    }

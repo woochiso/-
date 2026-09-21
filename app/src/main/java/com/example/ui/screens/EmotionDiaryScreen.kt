@@ -105,7 +105,7 @@ import androidx.compose.material3.CircularProgressIndicator
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun EmotionDiaryScreen(
+private fun LegacyEmotionDiaryScreen(
     viewModel: EmotionViewModel,
     diaryEntries: List<DiaryEntryEntity>,
     emotionCategoryStats: List<EmotionCategoryStat>,

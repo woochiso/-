@@ -136,3 +136,101 @@ data class AiAnalysisSummaryResponse(
     val analysis: AiAnalysisTextDto? = null,
     val message: String? = null
 )
+
+// 홈페이지 RecoveryInsightService의 결과를 그대로 전달받는 Android 전용 DTO.
+// 서버 버전 차이에도 화면이 종료되지 않도록 신규 컬렉션은 모두 안전한 기본값을 둔다.
+@JsonClass(generateAdapter = true)
+data class RecoveryInsightPeriodDto(
+    val label: String = "",
+    @Json(name = "start_date") val startDate: String = "",
+    @Json(name = "end_date") val endDate: String = ""
+)
+
+@JsonClass(generateAdapter = true)
+data class RecoveryEmotionChangeDto(
+    @Json(name = "category_code") val categoryCode: String = "",
+    @Json(name = "category_label") val categoryLabel: String = "",
+    @Json(name = "category_hanja") val categoryHanja: String = "",
+    val before: Int = 0,
+    val after: Int = 0,
+    val delta: Int = 0,
+    @Json(name = "average_delta") val averageDelta: Double = 0.0,
+    @Json(name = "same_direction_count") val sameDirectionCount: Int = 0,
+    @Json(name = "same_direction_ratio") val sameDirectionRatio: Int = 0,
+    @Json(name = "dominant_direction") val dominantDirection: String = "same",
+    @Json(name = "repeated_change") val repeatedChange: Boolean = false
+)
+
+@JsonClass(generateAdapter = true)
+data class RecoveryInsightSessionDto(
+    @Json(name = "session_id") val sessionId: String = "",
+    @Json(name = "activity_name") val activityName: String = "",
+    @Json(name = "recorded_at") val recordedAt: String = "",
+    val changes: List<RecoveryEmotionChangeDto> = emptyList()
+)
+
+@JsonClass(generateAdapter = true)
+data class RecoveryActivityPatternDto(
+    @Json(name = "activity_id") val activityId: Long = 0,
+    @Json(name = "activity_name") val activityName: String = "",
+    val count: Int = 0,
+    @Json(name = "enough_data") val enoughData: Boolean = false,
+    @Json(name = "has_repeated_change") val hasRepeatedChange: Boolean = false,
+    @Json(name = "favorable_rate") val favorableRate: Int = 0,
+    @Json(name = "emotion_changes") val emotionChanges: List<RecoveryEmotionChangeDto> = emptyList()
+)
+
+@JsonClass(generateAdapter = true)
+data class StoryRecallDto(
+    @Json(name = "story_id") val storyId: Long = 0,
+    @Json(name = "story_title") val storyTitle: String = "",
+    @Json(name = "current_count") val currentCount: Int = 0,
+    @Json(name = "previous_count") val previousCount: Int = 0,
+    @Json(name = "daily_average") val dailyAverage: Double = 0.0,
+    @Json(name = "previous_daily_average") val previousDailyAverage: Double? = null,
+    @Json(name = "change_percent") val changePercent: Double? = null,
+    @Json(name = "previous_data_available") val previousDataAvailable: Boolean? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class RecoveryLongTermDto(
+    val available: Boolean = false,
+    @Json(name = "period_days") val periodDays: Int = 0,
+    val stories: List<StoryRecallDto> = emptyList()
+)
+
+@JsonClass(generateAdapter = true)
+data class RecoveryInsightDataDto(
+    val period: RecoveryInsightPeriodDto = RecoveryInsightPeriodDto(),
+    @Json(name = "minimum_pattern_records") val minimumPatternRecords: Int = 3,
+    @Json(name = "comparable_records") val comparableRecords: Int = 0,
+    @Json(name = "recent_sessions") val recentSessions: List<RecoveryInsightSessionDto> = emptyList(),
+    @Json(name = "overall_changes") val overallChanges: List<RecoveryEmotionChangeDto> = emptyList(),
+    @Json(name = "activity_patterns") val activityPatterns: List<RecoveryActivityPatternDto> = emptyList(),
+    @Json(name = "long_term") val longTerm: RecoveryLongTermDto = RecoveryLongTermDto()
+)
+
+@JsonClass(generateAdapter = true)
+data class RecoveryInsightResponse(
+    val success: Boolean = false,
+    @Json(name = "period_key") val periodKey: String = "30d",
+    val data: RecoveryInsightDataDto? = null,
+    val message: String? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class RecoveryAiRequest(
+    val period: String,
+    @Json(name = "start_date") val startDate: String? = null,
+    @Json(name = "end_date") val endDate: String? = null,
+    val force: Boolean = false
+)
+
+@JsonClass(generateAdapter = true)
+data class RecoveryAiResponse(
+    val success: Boolean = false,
+    val cached: Boolean = false,
+    @Json(name = "insufficient_data") val insufficientData: Boolean = false,
+    val analysis: AiAnalysisTextDto? = null,
+    val message: String? = null
+)

@@ -7,6 +7,10 @@ import org.json.JSONObject
 import java.io.IOException
 
 class AiEmotionAnalysisRepository(private val api: ApiService, private val tokens: TokenManager) {
+    suspend fun recoveryInsight(period: String, startDate: String?, endDate: String?) =
+        call { api.getRecoveryInsight(it, period, startDate, endDate) }
+    suspend fun recoveryAi(period: String, startDate: String?, endDate: String?, force: Boolean) =
+        call { api.getRecoveryAiInsight(it, RecoveryAiRequest(period, startDate, endDate, force)) }
     suspend fun analysis(period: String, granularity: String, graphUnit: String) = call { api.getAiEmotionAnalysis(it, period, granularity, graphUnit) }
     suspend fun cachedSummary(period: String) = call { api.getAiEmotionAnalysisSummary(it, period) }
     suspend fun createSummary(period: String, force: Boolean) = call { api.createAiEmotionAnalysisSummary(it, AiAnalysisSummaryRequest(period, force = force)) }

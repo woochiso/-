@@ -30,7 +30,6 @@ fun EditProfileScreen(
 ) {
     LaunchedEffect(Unit) { onLoad() }
     val user = state.user
-    var phone by remember(user) { mutableStateOf(user?.phone.orEmpty()) }
     var nickname by remember(user) { mutableStateOf(user?.nickname.orEmpty()) }
     var birthYear by remember(user) { mutableStateOf(user?.birthYear?.toString().orEmpty()) }
     var gender by remember(user) { mutableStateOf(genderLabel(user?.gender)) }
@@ -61,11 +60,6 @@ fun EditProfileScreen(
         if (user == null) return@LazyColumn
 
         item { ReadOnlyProfileField("이메일", user.email) }
-        item {
-            OutlinedTextField(phone, { phone = it.take(13) }, label = { Text("휴대폰 번호") },
-                placeholder = { Text("010-1234-5678") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                singleLine = true, shape = RoundedCornerShape(14.dp), modifier = Modifier.fillMaxWidth())
-        }
         item {
             OutlinedTextField(nickname, { nickname = it }, label = { Text("닉네임") },
                 supportingText = {
@@ -103,7 +97,7 @@ fun EditProfileScreen(
                 onClick = {
                     val year = birthYear.toIntOrNull()
                     onSave(ProfileUpdateRequest(
-                        nickname = trimmedNickname, phone = phone.trim(), birthYear = year,
+                        nickname = trimmedNickname, birthYear = year,
                         gender = genderValue(gender), occupation = occupation.trim(),
                         maritalStatus = maritalValue(maritalStatus), children = children
                     ))

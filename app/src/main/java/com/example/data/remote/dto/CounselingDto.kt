@@ -23,6 +23,12 @@ data class CounselingMessageDto(
 )
 
 @JsonClass(generateAdapter = true)
+data class CounselingCrisisDto(
+    val level:String = "NONE",
+    @Json(name="show_card") val showCard:Boolean = false
+)
+
+@JsonClass(generateAdapter = true)
 data class CounselingResponse(
     val success:Boolean,
     val sessions:List<CounselingSessionDto> = emptyList(),
@@ -32,6 +38,7 @@ data class CounselingResponse(
     @Json(name="message_id") val messageId:Long? = null,
     @Json(name="ai_success") val aiSuccess:Boolean? = null,
     @Json(name="assistant_available") val assistantAvailable:Boolean? = null,
+    val crisis:CounselingCrisisDto? = null,
     val duplicate:Boolean = false,
     val message:String? = null
 )
@@ -51,4 +58,11 @@ data class CounselingMessageRequest(
 data class CounselingDeleteRequest(
     val action:String = "delete",
     @Json(name="sessionId") val sessionId:Long
+)
+
+@JsonClass(generateAdapter = true)
+data class CounselingTtsRequest(
+    @Json(name="sessionId") val sessionId: Long,
+    @Json(name="messageId") val messageId: Long,
+    @Json(name="counselorVoice") val counselorVoice: String = "DEFAULT"
 )

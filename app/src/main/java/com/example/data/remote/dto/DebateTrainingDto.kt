@@ -1,0 +1,10 @@
+package com.example.data.remote.dto
+import com.squareup.moshi.Json
+data class DebateTopicDto(val id:String="",val topic:String="",val a:String="",val b:String="",val recommended:Boolean=false)
+data class DebateCategoryDto(val id:String="",val title:String="",val topics:List<DebateTopicDto> = emptyList())
+data class DebateConfigResponse(val success:Boolean=false,val categories:List<DebateCategoryDto> = emptyList(),@Json(name="max_turns") val maxTurns:Int=12,val message:String?=null)
+data class DebatePlanDto(val category:String="",val topic:String="",@Json(name="user_side") val userSide:String="",@Json(name="debater_side") val debaterSide:String="")
+data class DebateScoresDto(val logic:Int=0,val evidence:Int=0,val response:Int=0,val consistency:Int=0,val clarity:Int=0)
+data class DebateActionRequest(val action:String,@Json(name="requestId") val requestId:String,val category:String?=null,@Json(name="topicSeedId") val topicSeedId:String?=null,@Json(name="customTopic") val customTopic:String?=null,val side:String?=null,@Json(name="practiceId") val practiceId:String?=null,val turn:Int?=null,val text:String?=null)
+data class DebateActionResponse(val success:Boolean=false,val action:String?=null,@Json(name="practice_id") val practiceId:String?=null,val plan:DebatePlanDto?=null,val transcript:String?=null,val turns:Int=0,@Json(name="max_turns") val maxTurns:Int=12,val moderator:String?=null,val debater:String?=null,@Json(name="current_issue") val currentIssue:String?=null,@Json(name="moderator_tts") val moderatorTts:String?=null,@Json(name="debater_tts") val debaterTts:String?=null,val finished:Boolean=false,@Json(name="moderator_summary") val moderatorSummary:String?=null,val scores:DebateScoresDto?=null,@Json(name="overall_score") val overallScore:Int?=null,val strength:String?=null,@Json(name="practice_point") val practicePoint:String?=null,@Json(name="alternative_phrase") val alternativePhrase:String?=null,@Json(name="conversation_tip") val conversationTip:String?=null,val message:String?=null)
+data class DebateTtsRequest(@Json(name="ttsToken") val ttsToken:String,val voice:String)

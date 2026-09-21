@@ -4,7 +4,6 @@ data class RegistrationRequest(
     val email: String,
     val password: String,
     val passwordConfirm: String,
-    val phoneNumber: String,
     val nickname: String,
     val birthYear: Int,
     val gender: String,

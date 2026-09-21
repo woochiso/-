@@ -18,15 +18,13 @@ import java.util.Calendar
 
 @Composable
 fun GoogleSignupScreen(state: AuthUiState, signup: GoogleSignupState, onSubmit: (GoogleSignupRequest) -> Unit, onCancel: () -> Unit) {
-    var phone by remember { mutableStateOf("") }; var nickname by remember { mutableStateOf(signup.profile.name.orEmpty().take(20)) }; var birthYear by remember { mutableStateOf("") }
+    var nickname by remember { mutableStateOf(signup.profile.name.orEmpty().take(20)) }; var birthYear by remember { mutableStateOf("") }
     var gender by remember { mutableStateOf("") }; var occupation by remember { mutableStateOf("") }; var occupationOther by remember { mutableStateOf("") }; var marital by remember { mutableStateOf("") }; var children by remember { mutableStateOf("") }; var purpose by remember { mutableStateOf("") }
     var terms by remember { mutableStateOf(false) }; var privacy by remember { mutableStateOf(false) }
-    val phoneDigits = phone.filter(Char::isDigit)
-    val phoneValid = phone.all { it.isDigit() || it == '-' } && Regex("^01[016789][0-9]{7,8}$").matches(phoneDigits)
     val cleanNickname = nickname.trim()
     val nicknameValid = cleanNickname.length in 2..20 && cleanNickname.matches(Regex("^[가-힣A-Za-z0-9_ ]+$"))
     val year = birthYear.toIntOrNull()
-    val valid = phoneValid && nicknameValid && birthYear.length == 4 && year != null && year in 1900..Calendar.getInstance().get(Calendar.YEAR) &&
+    val valid = nicknameValid && birthYear.length == 4 && year != null && year in 1900..Calendar.getInstance().get(Calendar.YEAR) &&
         gender in setOf("MALE", "FEMALE", "NO_ANSWER") &&
         occupation in setOf("학생", "회사원", "공무원", "전문직", "자영업", "프리랜서", "주부", "무직", "기타") &&
         (occupation != "기타" || occupationOther.trim().length in 1..100) &&
@@ -37,7 +35,6 @@ fun GoogleSignupScreen(state: AuthUiState, signup: GoogleSignupState, onSubmit: 
         Text("가입 정보를 완성해주세요", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text("Google에서 확인한 이메일에 우치소 회원정보를 연결합니다.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         OutlinedTextField(signup.profile.email, {}, readOnly = true, label = { Text("Google 이메일") }, modifier = Modifier.fillMaxWidth())
-        OutlinedTextField(phone, { phone = it.take(13) }, label = { Text("휴대폰 번호") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.fillMaxWidth())
         OutlinedTextField(nickname, { nickname = it.take(20) }, label = { Text("닉네임") }, supportingText = { Text("한글, 영문, 숫자, 공백, 밑줄 2~20자") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(birthYear, { birthYear = it.filter(Char::isDigit).take(4) }, label = { Text("출생연도") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), modifier = Modifier.fillMaxWidth())
         SignupDropdown("성별", gender, listOf("MALE" to "남성", "FEMALE" to "여성", "NO_ANSWER" to "응답하지 않음")) { gender = it }
@@ -50,7 +47,7 @@ fun GoogleSignupScreen(state: AuthUiState, signup: GoogleSignupState, onSubmit: 
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Checkbox(terms,{terms=it}); Text("[필수] 이용약관 동의 (${signup.consentVersions?.terms.orEmpty()})") }
         Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) { Checkbox(privacy,{privacy=it}); Text("[필수] 개인정보 수집·이용 동의 (${signup.consentVersions?.privacyCollection.orEmpty()})") }
         state.errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        Button(onClick={onSubmit(GoogleSignupRequest(signup.idToken,phone,nickname.trim(),birthYear.toInt(),gender,occupation,occupationOther.trim().ifBlank { null },marital,children.toInt(),purpose,terms,privacy))},enabled=valid&&!state.isLoading,modifier=Modifier.fillMaxWidth(),colors=ButtonDefaults.buttonColors(containerColor=AppActionButton)){if(state.isLoading)CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp)else Text("Google 계정으로 가입하기")}
+        Button(onClick={onSubmit(GoogleSignupRequest(signup.idToken,nickname.trim(),birthYear.toInt(),gender,occupation,occupationOther.trim().ifBlank { null },marital,children.toInt(),purpose,terms,privacy))},enabled=valid&&!state.isLoading,modifier=Modifier.fillMaxWidth(),colors=ButtonDefaults.buttonColors(containerColor=AppActionButton)){if(state.isLoading)CircularProgressIndicator(Modifier.size(20.dp),strokeWidth=2.dp)else Text("Google 계정으로 가입하기")}
         TextButton(onClick=onCancel,modifier=Modifier.fillMaxWidth()){Text("로그인으로 돌아가기")}
         Spacer(Modifier.navigationBarsPadding())
     }

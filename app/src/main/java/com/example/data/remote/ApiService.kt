@@ -11,6 +11,11 @@ import retrofit2.http.Header
 import retrofit2.http.Headers
 import retrofit2.http.POST
 import retrofit2.http.Query
+import retrofit2.http.Multipart
+import retrofit2.http.Part
+import okhttp3.ResponseBody
+import okhttp3.MultipartBody
+import okhttp3.RequestBody
 import com.example.data.remote.dto.*
 
 interface ApiService {
@@ -145,6 +150,16 @@ interface ApiService {
         @Header("Authorization") auth: String,
         @Body request: AiAnalysisSummaryRequest
     ): Response<AiAnalysisSummaryResponse>
+    @GET("analysis/recovery.php") suspend fun getRecoveryInsight(
+        @Header("Authorization") auth: String,
+        @Query("period") period: String,
+        @Query("startDate") startDate: String? = null,
+        @Query("endDate") endDate: String? = null
+    ): Response<RecoveryInsightResponse>
+    @POST("analysis/recovery-ai.php") suspend fun getRecoveryAiInsight(
+        @Header("Authorization") auth: String,
+        @Body request: RecoveryAiRequest
+    ): Response<RecoveryAiResponse>
     @GET("counseling/index.php") suspend fun getCounseling(
         @Header("Authorization") auth:String,
         @Query("sessionId") sessionId:Long? = null
@@ -158,4 +173,107 @@ interface ApiService {
         @Header("Authorization") auth:String,
         @Body request:CounselingDeleteRequest
     ):Response<CounselingResponse>
+    @Headers("X-Woochiso-Read-Timeout: 60")
+    @POST("counseling/tts.php") suspend fun getCounselingSpeech(
+        @Header("Authorization") auth:String,
+        @Body request:CounselingTtsRequest
+    ):Response<ResponseBody>
+
+    @Multipart
+    @Headers("X-Woochiso-Read-Timeout: 90")
+    @POST("training/humor/analyze.php")
+    suspend fun analyzeHumor(
+        @Header("Authorization") auth: String,
+        @Part audio: MultipartBody.Part,
+        @Part("duration") duration: RequestBody,
+        @Part("input_mode") inputMode: RequestBody
+    ): Response<HumorAnalysisResponse>
+
+    @Headers("X-Woochiso-Read-Timeout: 60")
+    @POST("training/humor/tts.php")
+    suspend fun getHumorSpeech(
+        @Header("Authorization") auth: String,
+        @Body request: HumorTtsRequest
+    ): Response<ResponseBody>
+
+    @GET("training/dating/index.php")
+    suspend fun getDatingConfig(@Header("Authorization") auth: String): Response<DatingConfigResponse>
+
+    @Headers("X-Woochiso-Read-Timeout: 60")
+    @POST("training/dating/index.php")
+    suspend fun datingAction(
+        @Header("Authorization") auth: String,
+        @Body request: DatingActionRequest
+    ): Response<DatingActionResponse>
+
+    @Headers("X-Woochiso-Read-Timeout: 60")
+    @POST("training/dating/tts.php")
+    suspend fun getDatingSpeech(
+        @Header("Authorization") auth: String,
+        @Body request: DatingTtsRequest
+    ): Response<ResponseBody>
+
+    @GET("training/expression/index.php")
+    suspend fun getExpressionConfig(@Header("Authorization") auth: String): Response<ExpressionConfigResponse>
+
+    @Headers("X-Woochiso-Read-Timeout: 60")
+    @POST("training/expression/index.php")
+    suspend fun expressionAction(
+        @Header("Authorization") auth: String,
+        @Body request: ExpressionActionRequest
+    ): Response<ExpressionActionResponse>
+
+    @Headers("X-Woochiso-Read-Timeout: 60")
+    @POST("training/expression/tts.php")
+    suspend fun getExpressionSpeech(
+        @Header("Authorization") auth: String,
+        @Body request: ExpressionTtsRequest
+    ): Response<ResponseBody>
+
+    @GET("training/quiz/index.php")
+    suspend fun getQuizConfig(@Header("Authorization") auth: String): Response<QuizConfigResponse>
+
+    @Headers("X-Woochiso-Read-Timeout: 60")
+    @POST("training/quiz/index.php")
+    suspend fun quizAction(
+        @Header("Authorization") auth: String,
+        @Body request: QuizActionRequest
+    ): Response<QuizActionResponse>
+
+    @Headers("X-Woochiso-Read-Timeout: 60")
+    @POST("training/quiz/tts.php")
+    suspend fun getQuizSpeech(
+        @Header("Authorization") auth: String,
+        @Body request: QuizTtsRequest
+    ): Response<ResponseBody>
+
+    @GET("training/debate/index.php") suspend fun getDebateConfig(@Header("Authorization") auth:String):Response<DebateConfigResponse>
+    @Headers("X-Woochiso-Read-Timeout: 60") @POST("training/debate/index.php") suspend fun debateAction(@Header("Authorization") auth:String,@Body request:DebateActionRequest):Response<DebateActionResponse>
+    @Headers("X-Woochiso-Read-Timeout: 60") @POST("training/debate/tts.php") suspend fun getDebateSpeech(@Header("Authorization") auth:String,@Body request:DebateTtsRequest):Response<ResponseBody>
+
+    @Multipart
+    @Headers("X-Woochiso-Read-Timeout: 120")
+    @POST("training/vocal/analyze.php")
+    suspend fun analyzeVocal(
+        @Header("Authorization") auth: String,
+        @Part audio: MultipartBody.Part,
+        @Part mixAudio: MultipartBody.Part?,
+        @Part("duration") duration: RequestBody,
+        @Part("input_mode") inputMode: RequestBody,
+        @Part("performance_mode") performanceMode: RequestBody,
+        @Part("mr_loaded") mrLoaded: RequestBody,
+        @Part("mix_created") mixCreated: RequestBody,
+        @Part("mix_source_valid") mixSourceValid: RequestBody,
+        @Part("mr_audio_tracks") mrAudioTracks: RequestBody,
+        @Part("mic_audio_tracks") micAudioTracks: RequestBody,
+        @Part("mix_destination_tracks") mixDestinationTracks: RequestBody,
+        @Part("client_wav") clientWav: RequestBody,
+        @Part("client_build") clientBuild: RequestBody
+    ):Response<VocalAnalysisResponse>
+    @Headers("X-Woochiso-Read-Timeout: 60")
+    @POST("training/vocal/tts.php") suspend fun getVocalSpeech(@Header("Authorization") auth:String,@Body request:VocalTtsRequest):Response<ResponseBody>
+
+    @GET("training/wit/index.php") suspend fun getWitConfig(@Header("Authorization") auth:String):Response<WitConfigResponse>
+    @Headers("X-Woochiso-Read-Timeout: 60") @POST("training/wit/index.php") suspend fun witAction(@Header("Authorization") auth:String,@Body request:WitActionRequest):Response<WitActionResponse>
+    @Headers("X-Woochiso-Read-Timeout: 60") @POST("training/wit/tts.php") suspend fun getWitSpeech(@Header("Authorization") auth:String,@Body request:WitTtsRequest):Response<ResponseBody>
 }

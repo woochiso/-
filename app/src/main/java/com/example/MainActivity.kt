@@ -9,6 +9,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -84,6 +85,14 @@ import com.example.ui.screens.AiEmotionAnalysisScreen
 import com.example.ui.screens.AiCounselingScreen
 import com.example.ui.screens.AiCareScreen
 import com.example.ui.screens.AiTrainingScreen
+import com.example.ui.screens.AiTrainingEntryScreen
+import com.example.ui.screens.HumorTrainingScreen
+import com.example.ui.screens.VocalTrainingScreen
+import com.example.ui.screens.WitTrainingScreen
+import com.example.ui.screens.DatingTrainingScreen
+import com.example.ui.screens.ExpressionTrainingScreen
+import com.example.ui.screens.QuizTrainingScreen
+import com.example.ui.screens.DebateTrainingScreen
 import com.example.ui.screens.RecoveryScreen
 import com.example.ui.screens.FavoriteEmotionsScreen
 import com.example.ui.screens.HumanEmotionsScreen
@@ -95,6 +104,7 @@ import com.example.ui.screens.SignupScreen
 import com.example.ui.screens.ForgotPasswordScreen
 import com.example.ui.screens.MyInfoComingSoonScreen
 import com.example.ui.screens.MyInfoScreen
+import com.example.ui.screens.AppInfoScreen
 import com.example.ui.screens.EditProfileScreen
 import com.example.ui.screens.ChangePasswordScreen
 import com.example.ui.screens.CustomerCenterScreen
@@ -113,6 +123,13 @@ import com.example.ui.viewmodel.RecoveryViewModel
 import com.example.ui.viewmodel.AiEmotionAnalysisViewModel
 import com.example.ui.viewmodel.CounselingViewModel
 import com.example.ui.viewmodel.HelpVideoViewModel
+import com.example.ui.viewmodel.HumorTrainingViewModel
+import com.example.ui.viewmodel.VocalTrainingViewModel
+import com.example.ui.viewmodel.WitTrainingViewModel
+import com.example.ui.viewmodel.DatingTrainingViewModel
+import com.example.ui.viewmodel.ExpressionTrainingViewModel
+import com.example.ui.viewmodel.QuizTrainingViewModel
+import com.example.ui.viewmodel.DebateTrainingViewModel
 
 enum class NavTab(
     val title: String,
@@ -159,7 +176,14 @@ private enum class AiCareDestination {
     MENU,
     EMOTION_ANALYSIS,
     COUNSELING,
-    TRAINING
+    TRAINING,
+    TRAINING_HUMOR,
+    TRAINING_DATING,
+    TRAINING_EMOTION_EXPRESSION,
+    TRAINING_QUIZ,
+    TRAINING_DEBATE,
+    TRAINING_VOCAL,
+    TRAINING_WIT
 }
 
 private enum class MyInfoDestination {
@@ -172,9 +196,14 @@ private enum class MyInfoDestination {
 }
 
 @Composable
-private fun ChildDestination(title: String, onBack: () -> Unit, content: @Composable () -> Unit) {
+private fun ChildDestination(
+    title: String,
+    onBack: () -> Unit,
+    showWoochisoBrand: Boolean = false,
+    content: @Composable () -> Unit
+) {
     Column(modifier = Modifier.fillMaxSize()) {
-        com.example.ui.components.ChildNavigationBar(title = title, onBack = onBack)
+        com.example.ui.components.ChildNavigationBar(title = title, onBack = onBack, showWoochisoBrand = showWoochisoBrand)
         Box(modifier = Modifier.weight(1f)) { content() }
     }
 }
@@ -191,6 +220,13 @@ class MainActivity : ComponentActivity() {
     private val aiEmotionAnalysisViewModel: AiEmotionAnalysisViewModel by viewModels()
     private val counselingViewModel: CounselingViewModel by viewModels()
     private val helpVideoViewModel: HelpVideoViewModel by viewModels()
+    private val humorTrainingViewModel: HumorTrainingViewModel by viewModels()
+    private val datingTrainingViewModel: DatingTrainingViewModel by viewModels()
+    private val expressionTrainingViewModel: ExpressionTrainingViewModel by viewModels()
+    private val quizTrainingViewModel: QuizTrainingViewModel by viewModels()
+    private val debateTrainingViewModel: DebateTrainingViewModel by viewModels()
+    private val vocalTrainingViewModel: VocalTrainingViewModel by viewModels()
+    private val witTrainingViewModel: WitTrainingViewModel by viewModels()
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -205,6 +241,7 @@ class MainActivity : ComponentActivity() {
                 var diaryDestination by remember { mutableStateOf(DiaryDestination.MENU) }
                 var aiCareDestination by remember { mutableStateOf(AiCareDestination.MENU) }
                 var myInfoDestination by remember { mutableStateOf(MyInfoDestination.MENU) }
+                var profileReturnTabIndex by remember { mutableStateOf<Int?>(null) }
                 var showEmailSignup by remember { mutableStateOf(false) }
                 var showForgotPassword by remember { mutableStateOf(false) }
                 var pendingStoryDetailId by remember { mutableStateOf<Long?>(null) }
@@ -230,6 +267,23 @@ class MainActivity : ComponentActivity() {
                 val serverNickname = authState.session?.nickname?.takeIf { it.isNotBlank() }
                 val displayNickname = serverNickname ?: userNickname
                 var showEditNicknameDialog by remember { mutableStateOf(false) }
+                val openProfileFromHeader = {
+                    if (selectedTabIndex != MainNavTab.MY_INFO.ordinal) {
+                        profileReturnTabIndex = selectedTabIndex
+                    }
+                    selectedTabIndex = MainNavTab.MY_INFO.ordinal
+                    myInfoDestination = MyInfoDestination.EDIT_PROFILE
+                }
+                val closeProfile = {
+                    myInfoDestination = MyInfoDestination.MENU
+                    profileReturnTabIndex?.let { selectedTabIndex = it }
+                    profileReturnTabIndex = null
+                }
+                val goHome = {
+                    selectedTabIndex = MainNavTab.HOME.ordinal
+                    homeDestination = HomeDestination.HOME
+                    profileReturnTabIndex = null
+                }
 
                 LaunchedEffect(Unit) {
                     viewModel.toastEvent.collect { message ->
@@ -281,7 +335,16 @@ class MainActivity : ComponentActivity() {
                         selectedTabIndex == MainNavTab.AI_CARE.ordinal &&
                         aiCareDestination != AiCareDestination.MENU
                 ) {
-                    aiCareDestination = AiCareDestination.MENU
+                    aiCareDestination = when (aiCareDestination) {
+                        AiCareDestination.TRAINING_HUMOR,
+                        AiCareDestination.TRAINING_DATING,
+                        AiCareDestination.TRAINING_EMOTION_EXPRESSION,
+                        AiCareDestination.TRAINING_QUIZ,
+                        AiCareDestination.TRAINING_DEBATE,
+                        AiCareDestination.TRAINING_VOCAL,
+                        AiCareDestination.TRAINING_WIT -> AiCareDestination.TRAINING
+                        else -> AiCareDestination.MENU
+                    }
                 }
                 BackHandler(
                     enabled = authState.isLoggedIn &&
@@ -289,7 +352,11 @@ class MainActivity : ComponentActivity() {
                         myInfoDestination != MyInfoDestination.MENU &&
                         myInfoDestination != MyInfoDestination.SUPPORT
                 ) {
-                    myInfoDestination = MyInfoDestination.MENU
+                    if (myInfoDestination == MyInfoDestination.EDIT_PROFILE && profileReturnTabIndex != null) {
+                        closeProfile()
+                    } else {
+                        myInfoDestination = MyInfoDestination.MENU
+                    }
                 }
 
                 if (!authState.isLoggedIn && showForgotPassword) {
@@ -354,6 +421,7 @@ class MainActivity : ComponentActivity() {
                             TopAppBar(
                                 title = {
                                     Row(
+                                        modifier = Modifier.clickable(onClick = goHome),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Image(
@@ -378,18 +446,15 @@ class MainActivity : ComponentActivity() {
                                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 maxLines = 1,
                                                 softWrap = false,
-                                                overflow = TextOverflow.Ellipsis
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.clickable(onClick = openProfileFromHeader)
                                             )
                                         }
                                     }
                                 },
                                 actions = {
                                     Surface(
-                                        onClick = {
-                                            if (serverNickname == null) {
-                                                showEditNicknameDialog = true
-                                            }
-                                        },
+                                        onClick = openProfileFromHeader,
                                         shape = RoundedCornerShape(16.dp),
                                         color = mainAccentContainerColor,
                                         modifier = Modifier.padding(end = 12.dp)
@@ -447,7 +512,7 @@ class MainActivity : ComponentActivity() {
                                     onClick = {
                                         selectedTabIndex = index
                                         if (tab == MainNavTab.HOME) {
-                                            homeDestination = HomeDestination.HOME
+                                            goHome()
                                         }
                                         if (tab == MainNavTab.EMOTION_DIARY) {
                                             diaryDestination = DiaryDestination.MENU
@@ -456,6 +521,7 @@ class MainActivity : ComponentActivity() {
                                             aiCareDestination = AiCareDestination.MENU
                                         }
                                         if (tab == MainNavTab.MY_INFO) {
+                                            profileReturnTabIndex = null
                                             myInfoDestination = MyInfoDestination.MENU
                                         }
                                     },
@@ -606,11 +672,12 @@ class MainActivity : ComponentActivity() {
                                         onOpenCounseling = { aiCareDestination = AiCareDestination.COUNSELING },
                                         onOpenTraining = { aiCareDestination = AiCareDestination.TRAINING }
                                     )
-                                    AiCareDestination.EMOTION_ANALYSIS -> ChildDestination("AI 감정분석", { aiCareDestination = AiCareDestination.MENU }) { AiEmotionAnalysisScreen(
-                                        viewModel = aiEmotionAnalysisViewModel,
-                                        onAuthExpired = authViewModel::logout,
-                                        showPageTitle = false
-                                    ) }
+                                     AiCareDestination.EMOTION_ANALYSIS -> ChildDestination("AI 감정분석", { aiCareDestination = AiCareDestination.MENU }) { AiEmotionAnalysisScreen(
+                                         viewModel = aiEmotionAnalysisViewModel,
+                                         onAuthExpired = authViewModel::logout,
+                                         nickname = authState.session?.nickname ?: displayNickname,
+                                         showPageTitle = false
+                                     ) }
                                     AiCareDestination.COUNSELING -> ChildDestination("AI 상담", {
                                         if (!counselingViewModel.navigateBack()) aiCareDestination = AiCareDestination.MENU
                                     }) { AiCounselingScreen(
@@ -618,14 +685,50 @@ class MainActivity : ComponentActivity() {
                                         onAuthExpired = authViewModel::logout,
                                         showPageTitle = false
                                     ) }
-                                    AiCareDestination.TRAINING -> ChildDestination("AI 트레이닝", { aiCareDestination = AiCareDestination.MENU }) { AiTrainingScreen(showPageTitle = false) }
+                                    AiCareDestination.TRAINING -> ChildDestination("AI 트레이닝", { aiCareDestination = AiCareDestination.MENU }) { AiTrainingScreen(
+                                        showPageTitle = false,
+                                        onOpenHumor = { aiCareDestination = AiCareDestination.TRAINING_HUMOR },
+                                        onOpenDating = { aiCareDestination = AiCareDestination.TRAINING_DATING },
+                                        onOpenEmotionExpression = { aiCareDestination = AiCareDestination.TRAINING_EMOTION_EXPRESSION },
+                                        onOpenQuiz = { aiCareDestination = AiCareDestination.TRAINING_QUIZ },
+                                        onOpenDebate = { aiCareDestination = AiCareDestination.TRAINING_DEBATE },
+                                        onOpenVocal = { aiCareDestination = AiCareDestination.TRAINING_VOCAL },
+                                        onOpenWit = { aiCareDestination = AiCareDestination.TRAINING_WIT }
+                                    ) }
+                                    AiCareDestination.TRAINING_HUMOR -> ChildDestination("😂 AI를 웃겨라", { aiCareDestination = AiCareDestination.TRAINING }, true) {
+                                        HumorTrainingScreen(
+                                            viewModel = humorTrainingViewModel,
+                                            onAuthExpired = authViewModel::logout
+                                        )
+                                    }
+                                    AiCareDestination.TRAINING_DATING -> ChildDestination("💕 AI 소개팅", { aiCareDestination = AiCareDestination.TRAINING }, true) {
+                                        DatingTrainingScreen(
+                                            viewModel = datingTrainingViewModel,
+                                            onAuthExpired = authViewModel::logout
+                                        )
+                                    }
+                                    AiCareDestination.TRAINING_EMOTION_EXPRESSION -> ChildDestination("💬 AI와 감정표현 연습", { aiCareDestination = AiCareDestination.TRAINING }, true) {
+                                        ExpressionTrainingScreen(
+                                            viewModel = expressionTrainingViewModel,
+                                            onAuthExpired = authViewModel::logout
+                                        )
+                                    }
+                                    AiCareDestination.TRAINING_QUIZ -> ChildDestination("🧠 AI 상식퀴즈", { aiCareDestination = AiCareDestination.TRAINING }, true) {
+                                        QuizTrainingScreen(
+                                            viewModel = quizTrainingViewModel,
+                                            onAuthExpired = authViewModel::logout
+                                        )
+                                    }
+                                    AiCareDestination.TRAINING_DEBATE -> ChildDestination("⚖️ AI 토론연습", { aiCareDestination = AiCareDestination.TRAINING }, true) { DebateTrainingScreen(debateTrainingViewModel, authViewModel::logout) }
+                                    AiCareDestination.TRAINING_VOCAL -> ChildDestination("🎤 AI 보컬트레이닝", { aiCareDestination = AiCareDestination.TRAINING }, true) { VocalTrainingScreen(vocalTrainingViewModel, authViewModel::logout) }
+                                    AiCareDestination.TRAINING_WIT -> ChildDestination("💡 AI 재치와 센스", { aiCareDestination = AiCareDestination.TRAINING }, true) { WitTrainingScreen(witTrainingViewModel, authViewModel::logout) }
                                 }
                                 MainNavTab.MY_INFO -> when (myInfoDestination) {
                                     MyInfoDestination.MENU -> MyInfoScreen(
                                         nickname = authState.session?.nickname ?: displayNickname,
                                         email = authState.session?.email,
                                         grade = authState.session?.grade,
-                                        onEditProfile = { myInfoDestination = MyInfoDestination.EDIT_PROFILE },
+                                        onEditProfile = { profileReturnTabIndex = null; myInfoDestination = MyInfoDestination.EDIT_PROFILE },
                                         onChangePassword = { myInfoDestination = MyInfoDestination.CHANGE_PASSWORD },
                                         onOpenHelpVideos = { myInfoDestination = MyInfoDestination.HELP_VIDEOS },
                                         onOpenSupport = { myInfoDestination = MyInfoDestination.SUPPORT },
@@ -633,7 +736,7 @@ class MainActivity : ComponentActivity() {
                                         onLogout = authViewModel::logout
                                     )
                                     MyInfoDestination.EDIT_PROFILE -> {
-                                        ChildDestination("회원정보 수정", { myInfoDestination = MyInfoDestination.MENU }) { EditProfileScreen(
+                                        ChildDestination("회원정보 수정", { closeProfile() }) { EditProfileScreen(
                                             state = profileState,
                                             onLoad = profileViewModel::loadProfile,
                                             onSave = profileViewModel::updateProfile,
@@ -656,7 +759,7 @@ class MainActivity : ComponentActivity() {
                                         onAuthExpired = authViewModel::logout,
                                         onExit = { myInfoDestination = MyInfoDestination.MENU }
                                     )
-                                    MyInfoDestination.APP_INFO -> ChildDestination("앱 정보", { myInfoDestination = MyInfoDestination.MENU }) { MyInfoComingSoonScreen("앱 정보", showPageTitle = false) }
+                                    MyInfoDestination.APP_INFO -> ChildDestination("앱 정보", { myInfoDestination = MyInfoDestination.MENU }) { AppInfoScreen() }
                                 }
                             }
                         }

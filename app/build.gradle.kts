@@ -70,7 +70,10 @@ googleServices { missingGoogleServicesStrategy = MissingGoogleServicesStrategy.W
 dependencies {
     coreLibraryDesugaring(libs.desugar.jdk.libs)
   implementation(libs.android.youtube.player)
-  implementation(platform(libs.androidx.compose.bom))
+  // Keep Compose compile/runtime artifacts on one atomic version. A debug-only
+  // tooling dependency otherwise upgraded runtime to 1.9 while source compiled
+  // against 1.7, causing FlowRow NoSuchMethodError on device.
+  implementation(enforcedPlatform(libs.androidx.compose.bom))
   implementation(platform(libs.firebase.bom))
   // implementation(libs.accompanist.permissions)
   implementation(libs.androidx.activity.compose)
@@ -121,7 +124,7 @@ dependencies {
   testImplementation(libs.roborazzi)
   testImplementation(libs.roborazzi.compose)
   testImplementation(libs.roborazzi.junit.rule)
-  androidTestImplementation(platform(libs.androidx.compose.bom))
+  androidTestImplementation(enforcedPlatform(libs.androidx.compose.bom))
   androidTestImplementation(libs.androidx.compose.ui.test.junit4)
   androidTestImplementation(libs.androidx.espresso.core)
   androidTestImplementation(libs.androidx.junit)

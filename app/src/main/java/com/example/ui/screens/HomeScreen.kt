@@ -34,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.ui.theme.AppActionButton
 
@@ -62,11 +63,14 @@ fun HomeScreen(
             Column {
                 Text(
                     text = nickname?.takeIf(String::isNotBlank)?.let {
-                        "${it}님, 오늘의 마음은 어떠신가요?"
-                    } ?: "오늘의 마음은 어떠신가요?",
+                        "${it}님,\n오늘의 마음은 어떠신가요?"
+                    } ?: "오늘의 마음은\n어떠신가요?",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
+                    color = MaterialTheme.colorScheme.onBackground,
+                    maxLines = 2,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(

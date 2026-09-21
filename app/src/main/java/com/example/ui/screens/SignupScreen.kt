@@ -59,7 +59,7 @@ fun SignupScreen(state: AuthUiState, onSubmit: (RegistrationRequest) -> Unit, on
     val scope = rememberCoroutineScope()
     var step by remember { mutableIntStateOf(0) }
     var email by remember { mutableStateOf("") }; var password by remember { mutableStateOf("") }; var confirm by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }; var nickname by remember { mutableStateOf("") }; var year by remember { mutableStateOf("") }
+    var nickname by remember { mutableStateOf("") }; var year by remember { mutableStateOf("") }
     var gender by remember { mutableStateOf("") }; var occupation by remember { mutableStateOf("") }; var occupationOther by remember { mutableStateOf("") }
     var marital by remember { mutableStateOf("") }; var children by remember { mutableStateOf("") }; var purpose by remember { mutableStateOf("") }
     var terms by remember { mutableStateOf(false) }; var privacy by remember { mutableStateOf(false) }; var localError by remember { mutableStateOf<String?>(null) }
@@ -79,9 +79,6 @@ fun SignupScreen(state: AuthUiState, onSubmit: (RegistrationRequest) -> Unit, on
     val emailAvailable = emailCheckMatchesInput && state.isEmailAvailable == true
     val passwordsMatch = confirm.isNotEmpty() && password == confirm
     val canContinue = emailFormatValid && emailAvailable && passwordValid && passwordsMatch && !state.isCheckingEmail
-    val phoneDigits = phone.filter(Char::isDigit)
-    val phoneCharactersValid = phone.all { it.isDigit() || it == '-' }
-    val phoneValid = phoneCharactersValid && Regex("^01[016789][0-9]{7,8}$").matches(phoneDigits)
     val trimmedNickname = nickname.trim()
     val nicknameLengthValid = trimmedNickname.length in 2..20
     val nicknameCharactersValid = trimmedNickname.matches(Regex("^[가-힣A-Za-z0-9_ ]+$"))
@@ -97,7 +94,7 @@ fun SignupScreen(state: AuthUiState, onSubmit: (RegistrationRequest) -> Unit, on
         marital in setOf("SINGLE", "MARRIED", "DIVORCED", "BEREAVED", "OTHER") &&
         (children.toIntOrNull()?.let { it in 0..5 } == true) &&
         purpose in setOf("SELF_UNDERSTANDING", "STRESS_MANAGEMENT", "DEPRESSION_MANAGEMENT", "COUNSELING", "HABIT_BUILDING", "OTHER")
-    val additionalInfoValid = phoneValid && nicknameFormatValid && nicknameAvailable && birthYearValid && dropdownsValid && terms && privacy && !state.isCheckingNickname
+    val additionalInfoValid = nicknameFormatValid && nicknameAvailable && birthYearValid && dropdownsValid && terms && privacy && !state.isCheckingNickname
 
     LaunchedEffect(email) {
         onEmailChanged(email)
@@ -169,7 +166,6 @@ fun SignupScreen(state: AuthUiState, onSubmit: (RegistrationRequest) -> Unit, on
             }
             else -> {
                 Text("추가 정보를 입력해주세요", color=titleColor, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                OutlinedTextField(phone, { phone = it.take(20); localError=null }, label = { Text("휴대폰 번호") }, colors = fieldColors, isError=phone.isNotEmpty()&&!phoneValid, supportingText={ if(phone.isNotEmpty()&&!phoneValid) Text("올바른 휴대폰 번호를 입력해주세요.",color=errorColor) }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(nickname, { nickname = it.take(30); localError=null }, label = { Text("닉네임") }, colors = fieldColors, isError=nickname.isNotEmpty()&&!nicknameFormatValid, supportingText = {
                     when {
                         nickname.isNotEmpty() && !nicknameLengthValid -> Text("닉네임은 2~20자로 입력해주세요.",color=errorColor)
@@ -189,7 +185,7 @@ fun SignupScreen(state: AuthUiState, onSubmit: (RegistrationRequest) -> Unit, on
                 RegisterDropdown("감정 기록 목적", purpose, listOf("SELF_UNDERSTANDING" to "나를 이해하기 위해", "STRESS_MANAGEMENT" to "스트레스 관리", "DEPRESSION_MANAGEMENT" to "우울감 관리", "COUNSELING" to "상담을 위해", "HABIT_BUILDING" to "습관 만들기", "OTHER" to "기타")) { purpose = it }
                 state.errorMessage?.let { Text(it,color=errorColor,style=MaterialTheme.typography.bodyMedium) }
                 Button(onClick = {
-                    if (additionalInfoValid && birthYear != null) onSubmit(RegistrationRequest(normalizedEmail,password,confirm,phone,trimmedNickname,birthYear,gender,occupation,occupationOther.trim().ifBlank { null },marital,children.toInt(),purpose,terms,privacy))
+                    if (additionalInfoValid && birthYear != null) onSubmit(RegistrationRequest(normalizedEmail,password,confirm,trimmedNickname,birthYear,gender,occupation,occupationOther.trim().ifBlank { null },marital,children.toInt(),purpose,terms,privacy))
                 }, enabled = additionalInfoValid && !state.isLoading, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = AppActionButton,contentColor=Color.White,disabledContainerColor=AppActionButton.copy(alpha=.55f),disabledContentColor=Color.White.copy(alpha=.85f))) { if (state.isLoading) { CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp,color=Color.White); Spacer(Modifier.width(8.dp)); Text("가입 처리 중...",color=Color.White) } else Text("가입 완료",color=Color.White) }
             }
         }
