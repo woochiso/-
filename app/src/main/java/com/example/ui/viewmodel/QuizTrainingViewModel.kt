@@ -124,6 +124,24 @@ class QuizTrainingViewModel(application: Application) : AndroidViewModel(applica
             speechError = null, speechBytes = null, speechToken = null)
     }
 
+    fun returnToStart() {
+        timerJob?.cancel()
+        pending = null
+        val current = _state.value
+        val config = current.config
+        val difficulty = config?.defaultDifficulty ?: "EASY"
+        _state.value = QuizTrainingUiState(
+            loading = false,
+            config = config,
+            category = "",
+            difficulty = difficulty,
+            difficultyTitle = config?.difficulties?.firstOrNull { it.id == difficulty }?.title ?: "초급",
+            voice = config?.defaultVoice ?: "female_caster",
+            secondsLeft = config?.timeLimit ?: 20,
+            finalTotal = config?.questionCount ?: 10
+        )
+    }
+
     private fun execute(request: QuizActionRequest) {
         if (_state.value.submitting) return
         pending = request

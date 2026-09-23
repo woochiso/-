@@ -43,10 +43,12 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.example.BuildConfig
 import com.example.ui.theme.AppActionButton
 import com.example.ui.theme.FreshTextMuted
+import com.example.ui.components.VoiceRecordingPanel
 import com.example.data.remote.dto.CounselingMessageDto
 import com.example.data.remote.dto.CounselingCrisisDto
 import com.example.ui.viewmodel.CounselingStage
 import com.example.ui.viewmodel.CounselingViewModel
+import com.example.ui.viewmodel.TtsUsageViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -56,7 +58,7 @@ private val CounselingAccent=Color(0xFF74AFDD)
 private enum class VoiceRecognitionState{IDLE,LISTENING,PROCESSING}
 
 @Composable
-fun AiCounselingScreen(viewModel:CounselingViewModel,onAuthExpired:()->Unit,showPageTitle:Boolean=true){
+fun AiCounselingScreen(viewModel:CounselingViewModel,usageViewModel:TtsUsageViewModel,onOpenVoiceGuide:()->Unit,onAuthExpired:()->Unit,showPageTitle:Boolean=true){
     val state by viewModel.state.collectAsStateWithLifecycle()
     var confirmNew by remember{mutableStateOf(false)}
     var deleteCandidate by remember{mutableStateOf<com.example.data.remote.dto.CounselingSessionDto?>(null)}
@@ -67,12 +69,12 @@ fun AiCounselingScreen(viewModel:CounselingViewModel,onAuthExpired:()->Unit,show
     BackHandler(enabled=state.stage!=CounselingStage.MODE){viewModel.navigateBack()}
     Box(Modifier.fillMaxSize()){
         when(state.stage){
-            CounselingStage.MODE->CounselingModeSelection(state.sessions.size,viewModel::chooseTextMode,viewModel::chooseVoiceMode,viewModel::showHistory,showPageTitle)
+            CounselingStage.MODE->CounselingModeSelection(state.sessions.size,viewModel::chooseTextMode,viewModel::chooseVoiceMode,viewModel::showHistory,usageViewModel,onOpenVoiceGuide,showPageTitle)
             CounselingStage.START->CounselingStart(state.loading,state.error,state.sessions,state.deletingSessionId,viewModel::freeTalk,viewModel::chooseToday,viewModel::chooseStory,viewModel::openSession,{deleteCandidate=it},showPageTitle)
             CounselingStage.TODAY->CounselingToday(state.today,viewModel::startToday,viewModel::newCounseling)
             CounselingStage.STORIES->CounselingStories(state.stories,state.selectedStory?.storyId,viewModel::selectStory,viewModel::startStory,viewModel::newCounseling)
             CounselingStage.HISTORY->CounselingHistory(state.loading,state.error,state.sessions,state.deletingSessionId,viewModel::openSession,{deleteCandidate=it})
-            CounselingStage.CHAT->if(state.voiceMode) VoiceCounselingChat(state.messages,state.sending,state.aiError,state.crisis,state.speechLoading,state.speechBytes,state.speechMessageId,state.speechError,viewModel::sendRecognized,viewModel::retry,viewModel::requestSpeech,viewModel::clearSpeech,viewModel::newCounseling,showPageTitle) else CounselingChat(state.messages,state.input,state.sending,state.aiError,state.crisis,viewModel::setInput,viewModel::send,viewModel::retry,viewModel::finish,{confirmNew=true},showPageTitle)
+            CounselingStage.CHAT->if(state.voiceMode) VoiceCounselingChat(state.messages,state.sending,state.aiError,state.crisis,state.speechLoading,state.speechBytes,state.speechMessageId,state.speechError,viewModel::sendRecognized,viewModel::retry,viewModel::requestGreetingSpeech,viewModel::requestSpeech,viewModel::clearSpeech,viewModel::newCounseling,onAuthExpired,showPageTitle) else CounselingChat(state.messages,state.input,state.sending,state.aiError,state.crisis,viewModel::setInput,viewModel::send,viewModel::retry,viewModel::finish,{confirmNew=true},showPageTitle)
         }
         SnackbarHost(snackbarHostState,Modifier.align(Alignment.BottomCenter))
     }
@@ -80,10 +82,11 @@ fun AiCounselingScreen(viewModel:CounselingViewModel,onAuthExpired:()->Unit,show
     deleteCandidate?.let{session->AlertDialog(onDismissRequest={if(state.deletingSessionId==null)deleteCandidate=null},title={Text("상담 기록을 삭제할까요?")},text={Text("이 상담의 대화 내용이 모두 삭제됩니다.\n삭제한 상담은 복구할 수 없습니다.")},dismissButton={TextButton(onClick={deleteCandidate=null},enabled=state.deletingSessionId==null){Text("취소")}},confirmButton={TextButton(onClick={deleteCandidate=null;viewModel.deleteSession(session.sessionId)},enabled=state.deletingSessionId==null,colors=ButtonDefaults.textButtonColors(contentColor=MaterialTheme.colorScheme.error)){Text("삭제")}})}
 }
 
-@Composable private fun CounselingModeSelection(historyCount:Int,text:()->Unit,voice:()->Unit,history:()->Unit,showPageTitle:Boolean){
+@Composable private fun CounselingModeSelection(historyCount:Int,text:()->Unit,voice:()->Unit,history:()->Unit,usageViewModel:TtsUsageViewModel,onOpenVoiceGuide:()->Unit,showPageTitle:Boolean){
     LazyColumn(Modifier.fillMaxSize(),contentPadding=PaddingValues(20.dp,18.dp,20.dp,32.dp),verticalArrangement=Arrangement.spacedBy(14.dp)){
         item{if(showPageTitle)Text("AI 상담",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold);Spacer(Modifier.height(5.dp));Text("글이나 목소리로 지금 마음에 대해 이야기해보세요.",color=MaterialTheme.colorScheme.onSurfaceVariant)}
         item{Text("상담 방식을 선택해주세요",style=MaterialTheme.typography.titleMedium,fontWeight=FontWeight.Bold)}
+        item{AiVoiceUsageCard(usageViewModel,onOpenVoiceGuide)}
         item{StartOption("텍스트 상담","메시지로 천천히 마음을 나눠보세요.",text)}
         item{StartOption("음성 상담","말로 이야기하고 AI 답변을 음성으로 들어보세요.",voice)}
         item{StartOption("이전 상담","저장된 상담 기록 ${historyCount}개를 확인합니다.",history)}
@@ -152,13 +155,17 @@ fun AiCounselingScreen(viewModel:CounselingViewModel,onAuthExpired:()->Unit,show
     }
 }
 
-@Composable private fun MessageBubble(message:CounselingMessageDto){val user=message.role=="USER";Row(Modifier.fillMaxWidth(),horizontalArrangement=if(user)Arrangement.End else Arrangement.Start){Surface(color=if(user)CounselingAccent else Color(0xFFF0F4F8),shape=RoundedCornerShape(16.dp),modifier=Modifier.widthIn(max=300.dp)){Text(message.content,Modifier.padding(horizontal=13.dp,vertical=10.dp),color=if(user)Color.White else MaterialTheme.colorScheme.onSurface)}}}
+private val CounselingMarkdownBold=Regex("""\*\*([^*\n]+)\*\*""")
+private fun displayCounselingContent(message:CounselingMessageDto):String =
+    if(message.role=="ASSISTANT")CounselingMarkdownBold.replace(message.content){it.groupValues[1]} else message.content
+
+@Composable private fun MessageBubble(message:CounselingMessageDto){val user=message.role=="USER";Row(Modifier.fillMaxWidth(),horizontalArrangement=if(user)Arrangement.End else Arrangement.Start){Surface(color=if(user)CounselingAccent else Color(0xFFF0F4F8),shape=RoundedCornerShape(16.dp),modifier=Modifier.widthIn(max=300.dp)){Text(displayCounselingContent(message),Modifier.padding(horizontal=13.dp,vertical=10.dp),color=if(user)Color.White else MaterialTheme.colorScheme.onSurface)}}}
 
 @Composable
 private fun VoiceCounselingChat(
     messages:List<CounselingMessageDto>,sending:Boolean,aiError:String?,crisis:CounselingCrisisDto?,speechLoading:Boolean,
     speechBytes:ByteArray?,speechMessageId:Long?,speechError:String?,sendRecognized:(String)->Unit,
-    retry:()->Unit,requestSpeech:(CounselingMessageDto)->Unit,clearSpeech:()->Unit,endCounseling:()->Unit,showPageTitle:Boolean
+    retry:()->Unit,requestGreetingSpeech:()->Unit,requestSpeech:(CounselingMessageDto)->Unit,clearSpeech:()->Unit,endCounseling:()->Unit,onAuthExpired:()->Unit,showPageTitle:Boolean
 ){
     val context=LocalContext.current
     val lifecycleOwner=LocalLifecycleOwner.current
@@ -177,6 +184,7 @@ private fun VoiceCounselingChat(
     var counselingActive by remember{mutableStateOf(true)}
     var lastAudioFile by remember{mutableStateOf<java.io.File?>(null)}
     val mediaPlayer=remember{MediaPlayer()}
+    LaunchedEffect(Unit){requestGreetingSpeech()}
     val recognizer=remember{if(SpeechRecognizer.isRecognitionAvailable(context))SpeechRecognizer.createSpeechRecognizer(context)else null}
     val recognitionIntent=remember{Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply{
         putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -293,7 +301,13 @@ private fun VoiceCounselingChat(
             clearSpeech()
         }
     }
-    LaunchedEffect(messages.size,sending){if(messages.isNotEmpty())listState.animateScrollToItem(messages.lastIndex+(if(sending)1 else 0))}
+    val userReadingHistory by remember { derivedStateOf {
+        val lastVisible=listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+        listState.isScrollInProgress && lastVisible < messages.lastIndex - 1
+    } }
+    var keepLatestVisible by remember{mutableStateOf(true)}
+    LaunchedEffect(userReadingHistory){if(userReadingHistory)keepLatestVisible=false else if(!listState.canScrollForward)keepLatestVisible=true}
+    LaunchedEffect(messages.size,sending){if(messages.isNotEmpty()&&keepLatestVisible)listState.animateScrollToItem(messages.lastIndex+(if(sending)1 else 0))}
     Column(Modifier.fillMaxSize().imePadding()) {
         Row(Modifier.fillMaxWidth().padding(horizontal=16.dp,vertical=10.dp),verticalAlignment=Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -309,16 +323,18 @@ private fun VoiceCounselingChat(
         }
         Surface(color=Color(0xFFF4F7FA),shape=RoundedCornerShape(16.dp),modifier=Modifier.fillMaxWidth().padding(horizontal=16.dp)) {
             Column(Modifier.padding(14.dp),horizontalAlignment=Alignment.CenterHorizontally) {
-                Text(when{playing->"AI가 답변하고 있습니다...";sending||speechLoading->"답변을 생각하고 있습니다...";userSpeakingSessionActive->"듣고 있습니다...";recognitionState==VoiceRecognitionState.PROCESSING->"말씀하신 내용을 확인하고 있습니다...";recognized.isBlank()->"마이크를 눌러 편하게 말씀해주세요.";else->recognized},color=FreshTextMuted)
-                if(userSpeakingSessionActive&&recognized.isNotBlank()){Spacer(Modifier.height(6.dp));Text(recognized,style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)}
-                recognitionError?.let{Text(it,color=FreshTextMuted,style=MaterialTheme.typography.bodySmall)}
+                Text(if(playing)"AI가 답변하고 있습니다..." else if(sending||speechLoading)"AI가 답변을 준비하고 있어요..." else "편하게 말씀해 주세요.",color=FreshTextMuted)
                 speechError?.let{Text(it,color=FreshTextMuted,style=MaterialTheme.typography.bodySmall)}
-                Spacer(Modifier.height(8.dp))
+                VoiceRecordingPanel(
+                    enabled=!sending&&!speechLoading,
+                    currentText="",
+                    onTranscribed={text->if(text.isNotBlank())sendRecognized(text)},
+                    onAuthExpired=onAuthExpired,
+                    autoTranscribeOnStop=true,
+                    compact=true,
+                    onRecordingStarted={if(playing){runCatching{mediaPlayer.stop()};playing=false}}
+                )
                 Row(horizontalArrangement=Arrangement.spacedBy(8.dp),verticalAlignment=Alignment.CenterVertically) {
-                    FilledIconButton(onClick={startListening()},enabled=!userSpeakingSessionActive&&!playing&&!sending&&!speechLoading&&recognitionState==VoiceRecognitionState.IDLE,colors=IconButtonDefaults.filledIconButtonColors(containerColor=CounselingAccent)) {
-                        Icon(Icons.Default.Mic,"음성 입력",tint=Color.White)
-                    }
-                    if(userSpeakingSessionActive) Button(onClick=::stopUserSpeaking,enabled=!sending&&!playing){Icon(Icons.Default.Stop,null);Spacer(Modifier.width(4.dp));Text("말하기 종료")}
                     lastAudioFile?.takeIf{it.exists()}?.let {
                         OutlinedButton(onClick={if(playing){mediaPlayer.pause();playing=false}else{segmentRestartJob?.cancel();userSpeakingSessionActive=false;recognizer?.cancel();recognitionState=VoiceRecognitionState.IDLE;if(mediaPlayer.currentPosition>=mediaPlayer.duration)mediaPlayer.seekTo(0);mediaPlayer.start();playing=true}}) {
                             Icon(if(playing)Icons.Default.Stop else Icons.Default.PlayArrow,null)

@@ -32,11 +32,12 @@ class CounselingViewModel(application:Application):AndroidViewModel(application)
     val state=_state.asStateFlow()
     private var pending:CounselingMessageRequest?=null
     private var localId=-1L
+    private var greetingSpeechRequested=false
 
     fun load(){viewModelScope.launch{_state.value=_state.value.copy(loading=true,error=null);when(val result=repository.sessions()){is EmotionServerResult.Success->_state.value=_state.value.copy(loading=false,sessions=result.value.sessions);EmotionServerResult.Unauthorized->_state.value=_state.value.copy(loading=false,requiresLogin=true);is EmotionServerResult.Error->_state.value=_state.value.copy(loading=false,error=result.message)}}}
     fun setInput(value:String){if(value.length<=5000)_state.value=_state.value.copy(input=value)}
     fun chooseTextMode(){_state.value=_state.value.copy(stage=CounselingStage.START,voiceMode=false,error=null)}
-    fun chooseVoiceMode(){freeTalk();_state.value=_state.value.copy(voiceMode=true)}
+    fun chooseVoiceMode(){greetingSpeechRequested=false;freeTalk();_state.value=_state.value.copy(voiceMode=true,speechLoading=false,speechBytes=null,speechMessageId=null,speechError=null)}
     fun showHistory(){_state.value=_state.value.copy(stage=CounselingStage.HISTORY,voiceMode=false)}
     fun freeTalk(){_state.value=_state.value.copy(stage=CounselingStage.CHAT,sessionId=null,messages=listOf(greeting("안녕하세요. 오늘 어떤 이야기를 나누고 싶으세요?")),includeEmotion=false,selectedStory=null,aiError=null,crisis=null)}
     fun chooseToday(){viewModelScope.launch{_state.value=_state.value.copy(loading=true,error=null);val date=LocalDate.now(ZoneId.of("Asia/Seoul")).toString();val todayResult=repository.today(date);val masterResult=repository.emotions();if(todayResult is EmotionServerResult.Unauthorized||masterResult is EmotionServerResult.Unauthorized){_state.value=_state.value.copy(loading=false,requiresLogin=true);return@launch};if(todayResult is EmotionServerResult.Error){_state.value=_state.value.copy(loading=false,error=todayResult.message);return@launch};if(masterResult is EmotionServerResult.Error){_state.value=_state.value.copy(loading=false,error=masterResult.message);return@launch};val records=(todayResult as EmotionServerResult.Success).value.records;val names=(masterResult as EmotionServerResult.Success).value.emotions.associate{it.emotionId to it.emotionName};_state.value=_state.value.copy(loading=false,stage=CounselingStage.TODAY,today=records.filter{it.todayCount>0}.map{(names[it.emotionId]?:"감정") to it.todayCount})}}
@@ -45,7 +46,7 @@ class CounselingViewModel(application:Application):AndroidViewModel(application)
     fun selectStory(story:StoryDto){_state.value=_state.value.copy(selectedStory=story)}
     fun startStory(){val story=_state.value.selectedStory?:return;_state.value=_state.value.copy(stage=CounselingStage.CHAT,sessionId=null,messages=listOf(greeting("‘${story.title}’ 사연을 참고해서 이야기해볼게요. 지금 가장 먼저 나누고 싶은 부분은 무엇인가요?")),includeEmotion=false,aiError=null,crisis=null)}
     fun openSession(id:Long){viewModelScope.launch{_state.value=_state.value.copy(loading=true,error=null,crisis=null);when(val result=repository.detail(id)){is EmotionServerResult.Success->_state.value=_state.value.copy(loading=false,stage=CounselingStage.CHAT,sessionId=id,messages=result.value.messages,includeEmotion=false,selectedStory=null,aiError=null,voiceMode=false,crisis=null);EmotionServerResult.Unauthorized->_state.value=_state.value.copy(loading=false,requiresLogin=true);is EmotionServerResult.Error->_state.value=_state.value.copy(loading=false,error=result.message)}}}
-    fun newCounseling(){pending=null;_state.value=_state.value.copy(stage=CounselingStage.MODE,sessionId=null,messages=emptyList(),input="",includeEmotion=false,selectedStory=null,aiError=null,voiceMode=false,speechBytes=null,speechMessageId=null,crisis=null)}
+    fun newCounseling(){pending=null;greetingSpeechRequested=false;_state.value=_state.value.copy(stage=CounselingStage.MODE,sessionId=null,messages=emptyList(),input="",includeEmotion=false,selectedStory=null,aiError=null,voiceMode=false,speechLoading=false,speechBytes=null,speechMessageId=null,speechError=null,crisis=null)}
     fun navigateBack():Boolean{
         when(_state.value.stage){
             CounselingStage.MODE->return false
@@ -65,6 +66,18 @@ class CounselingViewModel(application:Application):AndroidViewModel(application)
             _state.value=_state.value.copy(speechLoading=true,speechError=null)
             when(val result=repository.speech(sessionId,message.messageId)){
                 is EmotionServerResult.Success->_state.value=_state.value.copy(speechLoading=false,speechBytes=result.value,speechMessageId=message.messageId)
+                EmotionServerResult.Unauthorized->_state.value=_state.value.copy(speechLoading=false,requiresLogin=true)
+                is EmotionServerResult.Error->_state.value=_state.value.copy(speechLoading=false,speechError=result.message)
+            }
+        }
+    }
+    fun requestGreetingSpeech(){
+        if(!_state.value.voiceMode||greetingSpeechRequested)return
+        greetingSpeechRequested=true
+        viewModelScope.launch{
+            _state.value=_state.value.copy(speechLoading=true,speechError=null)
+            when(val result=repository.greetingSpeech()){
+                is EmotionServerResult.Success->_state.value=_state.value.copy(speechLoading=false,speechBytes=result.value,speechMessageId=0)
                 EmotionServerResult.Unauthorized->_state.value=_state.value.copy(speechLoading=false,requiresLogin=true)
                 is EmotionServerResult.Error->_state.value=_state.value.copy(speechLoading=false,speechError=result.message)
             }

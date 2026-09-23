@@ -86,6 +86,7 @@ import com.example.ui.screens.AiCounselingScreen
 import com.example.ui.screens.AiCareScreen
 import com.example.ui.screens.AiTrainingScreen
 import com.example.ui.screens.AiTrainingEntryScreen
+import com.example.ui.screens.AiVoiceGuideScreen
 import com.example.ui.screens.HumorTrainingScreen
 import com.example.ui.screens.VocalTrainingScreen
 import com.example.ui.screens.WitTrainingScreen
@@ -130,6 +131,7 @@ import com.example.ui.viewmodel.DatingTrainingViewModel
 import com.example.ui.viewmodel.ExpressionTrainingViewModel
 import com.example.ui.viewmodel.QuizTrainingViewModel
 import com.example.ui.viewmodel.DebateTrainingViewModel
+import com.example.ui.viewmodel.TtsUsageViewModel
 
 enum class NavTab(
     val title: String,
@@ -183,7 +185,8 @@ private enum class AiCareDestination {
     TRAINING_QUIZ,
     TRAINING_DEBATE,
     TRAINING_VOCAL,
-    TRAINING_WIT
+    TRAINING_WIT,
+    VOICE_GUIDE
 }
 
 private enum class MyInfoDestination {
@@ -227,6 +230,7 @@ class MainActivity : ComponentActivity() {
     private val debateTrainingViewModel: DebateTrainingViewModel by viewModels()
     private val vocalTrainingViewModel: VocalTrainingViewModel by viewModels()
     private val witTrainingViewModel: WitTrainingViewModel by viewModels()
+    private val ttsUsageViewModel: TtsUsageViewModel by viewModels()
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -682,10 +686,14 @@ class MainActivity : ComponentActivity() {
                                         if (!counselingViewModel.navigateBack()) aiCareDestination = AiCareDestination.MENU
                                     }) { AiCounselingScreen(
                                         viewModel = counselingViewModel,
+                                        usageViewModel = ttsUsageViewModel,
+                                        onOpenVoiceGuide = { aiCareDestination = AiCareDestination.VOICE_GUIDE },
                                         onAuthExpired = authViewModel::logout,
                                         showPageTitle = false
                                     ) }
                                     AiCareDestination.TRAINING -> ChildDestination("AI 트레이닝", { aiCareDestination = AiCareDestination.MENU }) { AiTrainingScreen(
+                                        usageViewModel = ttsUsageViewModel,
+                                        onOpenVoiceGuide = { aiCareDestination = AiCareDestination.VOICE_GUIDE },
                                         showPageTitle = false,
                                         onOpenHumor = { aiCareDestination = AiCareDestination.TRAINING_HUMOR },
                                         onOpenDating = { aiCareDestination = AiCareDestination.TRAINING_DATING },
@@ -722,17 +730,24 @@ class MainActivity : ComponentActivity() {
                                     AiCareDestination.TRAINING_DEBATE -> ChildDestination("⚖️ AI 토론연습", { aiCareDestination = AiCareDestination.TRAINING }, true) { DebateTrainingScreen(debateTrainingViewModel, authViewModel::logout) }
                                     AiCareDestination.TRAINING_VOCAL -> ChildDestination("🎤 AI 보컬트레이닝", { aiCareDestination = AiCareDestination.TRAINING }, true) { VocalTrainingScreen(vocalTrainingViewModel, authViewModel::logout) }
                                     AiCareDestination.TRAINING_WIT -> ChildDestination("💡 AI 재치와 센스", { aiCareDestination = AiCareDestination.TRAINING }, true) { WitTrainingScreen(witTrainingViewModel, authViewModel::logout) }
+                                    AiCareDestination.VOICE_GUIDE -> ChildDestination("AI 음성 이용안내", { aiCareDestination = AiCareDestination.MENU }) { AiVoiceGuideScreen(ttsUsageViewModel) }
                                 }
                                 MainNavTab.MY_INFO -> when (myInfoDestination) {
                                     MyInfoDestination.MENU -> MyInfoScreen(
                                         nickname = authState.session?.nickname ?: displayNickname,
                                         email = authState.session?.email,
                                         grade = authState.session?.grade,
+                                        profileState = profileState,
+                                        onLoadProfile = profileViewModel::loadProfile,
                                         onEditProfile = { profileReturnTabIndex = null; myInfoDestination = MyInfoDestination.EDIT_PROFILE },
                                         onChangePassword = { myInfoDestination = MyInfoDestination.CHANGE_PASSWORD },
                                         onOpenHelpVideos = { myInfoDestination = MyInfoDestination.HELP_VIDEOS },
                                         onOpenSupport = { myInfoDestination = MyInfoDestination.SUPPORT },
                                         onOpenAppInfo = { myInfoDestination = MyInfoDestination.APP_INFO },
+                                        onOpenVoiceGuide = {
+                                            selectedTabIndex = MainNavTab.AI_CARE.ordinal
+                                            aiCareDestination = AiCareDestination.VOICE_GUIDE
+                                        },
                                         onLogout = authViewModel::logout
                                     )
                                     MyInfoDestination.EDIT_PROFILE -> {

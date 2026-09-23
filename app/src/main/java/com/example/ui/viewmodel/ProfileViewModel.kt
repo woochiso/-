@@ -6,7 +6,9 @@ import androidx.lifecycle.viewModelScope
 import com.example.auth.TokenManager
 import com.example.data.remote.RetrofitClient
 import com.example.data.remote.dto.ProfileUpdateRequest
+import com.example.data.remote.dto.ProfileUsage
 import com.example.data.remote.dto.ProfileUser
+import com.example.data.remote.dto.TtsUsageResponse
 import com.example.data.repository.ProfileRepository
 import com.example.data.repository.ProfileResult
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,6 +21,8 @@ data class ProfileUiState(
     val isLoading: Boolean = false,
     val isSaving: Boolean = false,
     val user: ProfileUser? = null,
+    val usage: ProfileUsage? = null,
+    val tts: TtsUsageResponse? = null,
     val message: String? = null,
     val error: String? = null,
     val requiresLogin: Boolean = false
@@ -50,6 +54,8 @@ class ProfileViewModel(application: Application) : AndroidViewModel(application)
             when (result) {
                 is ProfileResult.Success -> current.copy(
                     isLoading = false, isSaving = false, user = result.user,
+                    usage = result.usage ?: current.usage,
+                    tts = result.tts ?: current.tts,
                     message = if (saving) result.message ?: "회원정보가 저장되었습니다." else null,
                     error = null, requiresLogin = false
                 )

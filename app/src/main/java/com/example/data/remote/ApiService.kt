@@ -19,6 +19,9 @@ import okhttp3.RequestBody
 import com.example.data.remote.dto.*
 
 interface ApiService {
+    @GET("tts/usage.php")
+    suspend fun getTtsUsage(@Header("Authorization") auth: String): Response<TtsUsageResponse>
+
     @POST("login.php")
     suspend fun login(@Body request: LoginRequest): Response<LoginResponse>
 
@@ -276,4 +279,12 @@ interface ApiService {
     @GET("training/wit/index.php") suspend fun getWitConfig(@Header("Authorization") auth:String):Response<WitConfigResponse>
     @Headers("X-Woochiso-Read-Timeout: 60") @POST("training/wit/index.php") suspend fun witAction(@Header("Authorization") auth:String,@Body request:WitActionRequest):Response<WitActionResponse>
     @Headers("X-Woochiso-Read-Timeout: 60") @POST("training/wit/tts.php") suspend fun getWitSpeech(@Header("Authorization") auth:String,@Body request:WitTtsRequest):Response<ResponseBody>
+
+    @Multipart
+    @Headers("X-Woochiso-Read-Timeout: 60")
+    @POST("audio/transcribe.php")
+    suspend fun transcribeVoice(
+        @Header("Authorization") auth: String,
+        @Part audio: MultipartBody.Part
+    ): Response<VoiceTranscriptionResponse>
 }

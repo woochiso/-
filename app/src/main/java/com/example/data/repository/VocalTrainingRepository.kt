@@ -1,6 +1,7 @@
 package com.example.data.repository
 
 import android.util.Log
+import com.example.BuildConfig
 import com.example.auth.TokenManager
 import com.example.data.remote.ApiService
 import com.example.data.remote.dto.VocalAnalysisResponse
@@ -18,14 +19,16 @@ class VocalTrainingRepository(private val api: ApiService, private val tokens: T
     suspend fun analyze(file: File, duration: Double, mode: String, mixFile: File?): EmotionServerResult<VocalAnalysisResponse> {
         val token = tokens.accessToken() ?: return EmotionServerResult.Unauthorized
         return try {
-            Log.d("VOCAL_FLOW", "repository analyze entered")
-            Log.d("VOCAL_DEBUG", "source=${if (file.name.startsWith("vocal-upload")) "picked" else "recorded"}")
-            Log.d("VOCAL_DEBUG", "filePath=${file.absolutePath} fileName=${file.name} extension=${file.extension}")
-            Log.d("VOCAL_DEBUG", "exists=${file.exists()} size=${file.length()} resolverMime=audio/wav")
-            Log.d("VOCAL_DEBUG", "requestMime=audio/wav multipartField=audio multipartFilename=${file.name}")
-            Log.d("VOCAL_AI_UPLOAD", "filename=${file.name} extension=${file.extension.lowercase()} androidMime=audio/wav requestMime=audio/wav size=${file.length()} field=audio")
-            mixFile?.let { Log.d("MR_DEBUG", "uploadFile=${it.name} size=${it.length()} mime=audio/wav multipartField=mix_audio") }
-            Log.d("VOCAL_FLOW", "request ready url=https://woochiso.com/api/training/vocal/analyze.php method=POST")
+            if (BuildConfig.DEBUG) {
+                Log.d("VOCAL_FLOW", "repository analyze entered")
+                Log.d("VOCAL_DEBUG", "source=${if (file.name.startsWith("vocal-upload")) "picked" else "recorded"}")
+                Log.d("VOCAL_DEBUG", "filePath=${file.absolutePath} fileName=${file.name} extension=${file.extension}")
+                Log.d("VOCAL_DEBUG", "exists=${file.exists()} size=${file.length()} resolverMime=audio/wav")
+                Log.d("VOCAL_DEBUG", "requestMime=audio/wav multipartField=audio multipartFilename=${file.name}")
+                Log.d("VOCAL_AI_UPLOAD", "filename=${file.name} extension=${file.extension.lowercase()} androidMime=audio/wav requestMime=audio/wav size=${file.length()} field=audio")
+                mixFile?.let { Log.d("MR_DEBUG", "uploadFile=${it.name} size=${it.length()} mime=audio/wav multipartField=mix_audio") }
+                Log.d("VOCAL_FLOW", "request ready url=https://woochiso.com/api/training/vocal/analyze.php method=POST")
+            }
             val response = api.analyzeVocal(
                 "Bearer $token",
                 MultipartBody.Part.createFormData("audio", "android-vocal.wav", file.asRequestBody(WAV)),
@@ -44,12 +47,14 @@ class VocalTrainingRepository(private val api: ApiService, private val tokens: T
             )
             val body = response.body()
             val errorBody = response.errorBody()?.string()
-            Log.d("VOCAL_HTTP_URL", "https://woochiso.com/api/training/vocal/analyze.php")
-            Log.d("VOCAL_HTTP_STATUS", "status=${response.code()} contentType=${response.headers()["Content-Type"]} serverVersion=${response.headers()["X-Woochiso-Vocal-Version"] ?: "missing"}")
-            if (!response.isSuccessful) Log.d("VOCAL_HTTP_BODY", errorBody.orEmpty())
-            Log.d("VOCAL_HTTP", "status=${response.code()} contentType=${response.headers()["Content-Type"]} success=${response.isSuccessful && body?.success == true}")
-            if (!response.isSuccessful) {
-                Log.d("VOCAL_HTTP", "errorBody=${(body?.message ?: parse(errorBody)).take(300)}")
+            if (BuildConfig.DEBUG) {
+                Log.d("VOCAL_HTTP_URL", "https://woochiso.com/api/training/vocal/analyze.php")
+                Log.d("VOCAL_HTTP_STATUS", "status=${response.code()} contentType=${response.headers()["Content-Type"]} serverVersion=${response.headers()["X-Woochiso-Vocal-Version"] ?: "missing"}")
+                if (!response.isSuccessful) Log.d("VOCAL_HTTP_BODY", errorBody.orEmpty())
+                Log.d("VOCAL_HTTP", "status=${response.code()} contentType=${response.headers()["Content-Type"]} success=${response.isSuccessful && body?.success == true}")
+                if (!response.isSuccessful) {
+                    Log.d("VOCAL_HTTP", "errorBody=${(body?.message ?: parse(errorBody)).take(300)}")
+                }
             }
             when {
                 response.isSuccessful && body?.success == true -> EmotionServerResult.Success(body)

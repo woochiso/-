@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.ui.components.AiTrainingHeader
+import com.example.ui.components.VoiceRecordingPanel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
 import com.example.data.remote.dto.ExpressionOptionDto
@@ -48,6 +49,7 @@ fun ExpressionTrainingScreen(viewModel: ExpressionTrainingViewModel, onAuthExpir
     val cache = remember { mutableMapOf<String, File>() }
     var activeToken by remember { mutableStateOf<String?>(null) }
     var playing by remember { mutableStateOf(false) }
+    var voiceBusy by remember { mutableStateOf(false) }
     fun stop() { runCatching { if (player.isPlaying) player.stop() }; playing = false }
     fun play(file: File, token: String) { runCatching { player.reset(); player.setDataSource(file.absolutePath); player.setOnPreparedListener { it.start(); playing = true; activeToken = token }; player.setOnCompletionListener { playing = false }; player.prepareAsync() } }
     DisposableEffect(Unit) { onDispose { stop(); player.release(); cache.values.forEach(File::delete) } }
@@ -56,35 +58,11 @@ fun ExpressionTrainingScreen(viewModel: ExpressionTrainingViewModel, onAuthExpir
         val bytes = state.speechBytes; val token = state.speechToken
         if (bytes != null && token != null) { val file = File(context.cacheDir, "expression-$token.mp3"); file.writeBytes(bytes); cache[token] = file; play(file, token); viewModel.clearSpeech() }
     }
-    var voiceInputActive by remember { mutableStateOf(false) }
-    var recognitionRunning by remember { mutableStateOf(false) }
-    var voiceError by remember { mutableStateOf<String?>(null) }
-    val speechController = remember {
-        ContinuousExpressionSpeech(
-            context = context,
-            onText = viewModel::updateText,
-            onState = { active, running -> voiceInputActive = active; recognitionRunning = running },
-            onError = { voiceError = it }
-        )
-    }
-    val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) { stop(); voiceError = null; speechController.start(state.inputText) }
-        else voiceError = "마이크 권한이 필요합니다."
-    }
-    fun voiceInput() {
-        if (voiceInputActive) {
-            viewModel.updateText(speechController.finish())
-        } else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            stop(); voiceError = null; speechController.start(state.inputText)
-        } else microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
-    }
-    DisposableEffect(speechController) { onDispose { speechController.destroy() } }
-    LaunchedEffect(state.stage, state.sending) { if (state.stage != ExpressionStage.PRACTICE || state.sending) speechController.finish() }
     fun audio() { if (playing) stop() else activeToken?.let { token -> cache[token]?.let { play(it, token) } } }
 
     when (state.stage) {
         ExpressionStage.CHOOSE -> ExpressionChoose(state, viewModel)
-        ExpressionStage.PRACTICE -> ExpressionPractice(state, viewModel, ::voiceInput, voiceInputActive, recognitionRunning, voiceError, playing, ::audio)
+        ExpressionStage.PRACTICE -> ExpressionPractice(state, viewModel, onAuthExpired, voiceBusy, {voiceBusy=it}, ::stop, playing, ::audio)
         ExpressionStage.RESULT -> ExpressionResult(state, viewModel, playing, ::audio)
     }
 }
@@ -104,15 +82,15 @@ fun ExpressionTrainingScreen(viewModel: ExpressionTrainingViewModel, onAuthExpir
 @Composable private fun ExpressionGuide() = Card(colors = CardDefaults.cardColors(containerColor = FreshSurfaceVariant), border = BorderStroke(1.dp, FreshOutline), shape = RoundedCornerShape(18.dp)) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) { Text("감정표현 연습 방법", color = FreshDeepIndigo, fontWeight = FontWeight.Bold); Text("🎭 ① 상황 확인"); Text("💬 ② 내 마음 표현"); Text("✨ ③ AI 피드백 확인"); HorizontalDivider(color = FreshOutline); Text("잘해야 하는 시험이 아닙니다. 편하게 표현해보세요!", style = MaterialTheme.typography.bodySmall, color = FreshTextVariant) } }
 @Composable private fun ExpressionCategoryCard(option: ExpressionOptionDto, disabled: Boolean, choose: () -> Unit) = Card(Modifier.fillMaxWidth().clickable(enabled = !disabled, onClick = choose), colors = CardDefaults.cardColors(containerColor = Color.White), border = BorderStroke(1.dp, FreshOutline), shape = RoundedCornerShape(14.dp)) { Column(Modifier.padding(14.dp)) { Text(option.title, fontWeight = FontWeight.Bold); Text(option.description, style = MaterialTheme.typography.bodySmall, color = FreshTextVariant) } }
 
-@Composable private fun ExpressionPractice(state: ExpressionTrainingUiState, vm: ExpressionTrainingViewModel, voiceInput: () -> Unit, voiceInputActive: Boolean, recognitionRunning: Boolean, voiceError: String?, playing: Boolean, audio: () -> Unit) {
+@Composable private fun ExpressionPractice(state: ExpressionTrainingUiState, vm: ExpressionTrainingViewModel, onAuthExpired:()->Unit, voiceBusy:Boolean, setVoiceBusy:(Boolean)->Unit, stopAudio:()->Unit, playing: Boolean, audio: () -> Unit) {
     LazyColumn(Modifier.fillMaxSize().imePadding().padding(horizontal = 20.dp), contentPadding = PaddingValues(bottom = 28.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { AiTrainingHeader("💬", "AI와 감정표현 연습", "내 감정을 말로 표현하고\nAI와 함께 자연스러운 표현을 연습해보세요.") }
         item { Column(verticalArrangement = Arrangement.spacedBy(7.dp)) { Text("AI 목소리", fontWeight = FontWeight.Bold); Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) { state.config?.voices.orEmpty().forEach { option -> FilterChip(selected = state.voice == option.id, onClick = { vm.selectVoice(option.id) }, label = { Text(option.title) }, enabled = !state.sending) } } } }
         item { Card(colors = CardDefaults.cardColors(containerColor = FreshLightIndigoContainer), border = BorderStroke(1.dp, FreshOutline), shape = RoundedCornerShape(18.dp)) { Column(Modifier.padding(17.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("🎭 오늘의 상황", color = FreshDeepIndigo, fontWeight = FontWeight.Bold); Text(state.scenario); Surface(color = Color.White.copy(alpha = .75f), shape = RoundedCornerShape(12.dp)) { Text(state.partnerLine, Modifier.padding(12.dp), fontWeight = FontWeight.SemiBold) }; TextButton(onClick = audio) { androidx.compose.material3.Icon(if (playing) Icons.Default.Stop else Icons.Default.PlayArrow, null); Text(if (playing) "음성 멈춤" else "상황 다시 듣기") } } } }
-        item { Text("내가 어떻게 말할까요?", fontWeight = FontWeight.Bold); OutlinedTextField(state.inputText, vm::updateText, Modifier.fillMaxWidth(), enabled = !voiceInputActive, minLines = 4, maxLines = 7, placeholder = { Text(if (voiceInputActive) "인식된 표현이 여기에 누적됩니다." else "편하게 이야기해 주세요.") }, supportingText = { Text("${state.inputText.length}/2000") }); OutlinedButton(voiceInput, Modifier.fillMaxWidth(), enabled = !state.sending) { androidx.compose.material3.Icon(if (voiceInputActive) Icons.Default.Stop else Icons.Default.Mic, null); Spacer(Modifier.width(8.dp)); Text(if (voiceInputActive) "■ 말하기 완료" else "🎙 말로 표현하기") }; if (voiceInputActive) { Text(if (recognitionRunning) "🎙 듣고 있습니다..." else "🎙 다음 말을 기다리고 있습니다...", style = MaterialTheme.typography.bodySmall, color = FreshDeepIndigo); Text("잠시 말을 멈춰도 계속 듣습니다.\n모두 말씀하신 후 '말하기 완료'를 눌러주세요.", style = MaterialTheme.typography.bodySmall, color = FreshTextMuted) }; voiceError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = FreshTextVariant) } }
+        item { Text("내가 어떻게 말할까요?", fontWeight = FontWeight.Bold); OutlinedTextField(state.inputText, vm::updateText, Modifier.fillMaxWidth(), enabled=!voiceBusy&&!state.sending, minLines = 4, maxLines = 7, placeholder = { Text("편하게 이야기해 주세요.") }, supportingText = { Text("${state.inputText.length}/2000") }); Spacer(Modifier.height(8.dp)); VoiceRecordingPanel(enabled=!state.sending,currentText="",onTranscribed={text->if(text.isNotBlank()){vm.updateText(text);vm.submit()}},onAuthExpired=onAuthExpired,autoTranscribeOnStop=true,compact=true,onRecordingStarted=stopAudio,onBusyChanged=setVoiceBusy) }
         state.error?.let { item { ExpressionError(it, vm::retry) } }
         state.speechError?.let { item { Text(it, style = MaterialTheme.typography.bodySmall, color = FreshTextMuted) } }
-        item { Button(vm::submit, Modifier.fillMaxWidth().height(52.dp), enabled = state.inputText.isNotBlank() && !state.sending && !voiceInputActive, colors = ButtonDefaults.buttonColors(containerColor = AppActionButton)) { if (state.sending) { CircularProgressIndicator(Modifier.size(20.dp), color = Color.White); Spacer(Modifier.width(8.dp)); Text("AI가 표현을 살펴보고 있어요...") } else Text("✨ AI에게 전달") } }
+        item { Button(vm::submit, Modifier.fillMaxWidth().height(52.dp), enabled = state.inputText.isNotBlank() && !state.sending && !voiceBusy, colors = ButtonDefaults.buttonColors(containerColor = AppActionButton)) { if (state.sending) { CircularProgressIndicator(Modifier.size(20.dp), color = Color.White); Spacer(Modifier.width(8.dp)); Text("AI가 표현을 살펴보고 있어요...") } else Text("✨ AI에게 전달") } }
     }
 }
 

@@ -16,12 +16,14 @@ class CounselingRepository(private val api:ApiService,private val tokens:TokenMa
     suspend fun detail(sessionId:Long)=call{api.getCounseling(it,sessionId)}
     suspend fun send(request:CounselingMessageRequest)=call{api.sendCounselingMessage(it,request)}
     suspend fun deleteSession(sessionId:Long)=call{api.deleteCounselingSession(it,CounselingDeleteRequest(sessionId=sessionId))}
-    suspend fun speech(sessionId:Long,messageId:Long):EmotionServerResult<ByteArray>{
+    suspend fun speech(sessionId:Long,messageId:Long)=speech(CounselingTtsRequest(sessionId=sessionId,messageId=messageId))
+    suspend fun greetingSpeech()=speech(CounselingTtsRequest(mode="intro",introKey="WELCOME"))
+    private suspend fun speech(request:CounselingTtsRequest):EmotionServerResult<ByteArray>{
         val token=tokens.accessToken()?:return EmotionServerResult.Unauthorized
         return try{
-            if(BuildConfig.DEBUG)Log.d("WOOCHISO_TTS","TTS_REQUEST sessionId=$sessionId messageId=$messageId bearer=true")
+            if(BuildConfig.DEBUG)Log.d("WOOCHISO_TTS","TTS_REQUEST mode=${request.mode} sessionId=${request.sessionId} messageId=${request.messageId} bearer=true")
             if(BuildConfig.DEBUG)Log.d("WOOCHISO_TTS","AUDIO_DOWNLOAD_START url=${BuildConfig.WOOCHISO_API_BASE_URL}counseling/tts.php")
-            val response=api.getCounselingSpeech("Bearer $token",CounselingTtsRequest(sessionId,messageId))
+            val response=api.getCounselingSpeech("Bearer $token",request)
             val body=response.body()
             val contentType=response.headers()["Content-Type"].orEmpty().lowercase()
             if(BuildConfig.DEBUG){

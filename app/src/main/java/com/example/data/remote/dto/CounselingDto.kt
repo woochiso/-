@@ -62,7 +62,9 @@ data class CounselingDeleteRequest(
 
 @JsonClass(generateAdapter = true)
 data class CounselingTtsRequest(
-    @Json(name="sessionId") val sessionId: Long,
-    @Json(name="messageId") val messageId: Long,
+    val mode: String = "assistant",
+    @Json(name="sessionId") val sessionId: Long? = null,
+    @Json(name="messageId") val messageId: Long? = null,
+    @Json(name="introKey") val introKey: String? = null,
     @Json(name="counselorVoice") val counselorVoice: String = "DEFAULT"
 )

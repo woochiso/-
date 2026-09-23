@@ -34,6 +34,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
 import com.example.data.remote.dto.DatingOptionDto
 import com.example.ui.components.AiTrainingHeader
+import com.example.ui.components.VoiceRecordingPanel
 import com.example.ui.theme.*
 import com.example.ui.viewmodel.*
 import kotlinx.coroutines.launch
@@ -49,6 +50,7 @@ fun DatingTrainingScreen(viewModel: DatingTrainingViewModel, onAuthExpired: () -
     var playableToken by remember { mutableStateOf<String?>(null) }
     val audioCache = remember { mutableMapOf<String, File>() }
     var input by remember { mutableStateOf("") }
+    var voiceBusy by remember { mutableStateOf(false) }
 
     fun stopAudio() { runCatching { if (player.isPlaying) player.stop() }; playing = false }
     fun play(file: File, token: String) {
@@ -68,47 +70,14 @@ fun DatingTrainingScreen(viewModel: DatingTrainingViewModel, onAuthExpired: () -
             play(file, token); viewModel.clearSpeech()
         }
     }
-    var voiceInputActive by remember { mutableStateOf(false) }
-    var recognitionRunning by remember { mutableStateOf(false) }
-    var voiceError by remember { mutableStateOf<String?>(null) }
-    val speechController = remember {
-        ContinuousDatingSpeech(
-            context = context,
-            onText = { input = it },
-            onState = { active, running -> voiceInputActive = active; recognitionRunning = running },
-            onError = { voiceError = it }
-        )
-    }
-    val microphonePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) { stopAudio(); voiceError = null; speechController.start(input) }
-        else voiceError = "마이크 권한이 필요합니다."
-    }
-    fun toggleSpeechInput() {
-        if (voiceInputActive) {
-            val finalText = speechController.finish()
-            input = finalText
-            if (finalText.isNotBlank() && !state.sending) {
-                val messageToSend = finalText
-                viewModel.reply(messageToSend)
-                speechController.resetTranscript()
-                input = ""
-            }
-        } else if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            stopAudio(); voiceError = null; speechController.start(input)
-        } else microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
-    }
-    DisposableEffect(speechController) { onDispose { speechController.destroy() } }
-    LaunchedEffect(state.stage, state.sending) { if (state.stage != DatingStage.CHAT || state.sending) speechController.finish() }
-
     when (state.stage) {
         DatingStage.SETUP -> DatingSetup(state, viewModel)
         DatingStage.CHAT -> DatingChat(state, input, { input = it }, {
             val messageToSend = input
             stopAudio()
             viewModel.reply(messageToSend)
-            speechController.resetTranscript()
             input = ""
-        }, ::toggleSpeechInput, voiceInputActive, recognitionRunning, voiceError, viewModel::finish, viewModel::retry, playing, {
+        }, onAuthExpired, voiceBusy, {voiceBusy=it}, {text->if(text.isNotBlank())viewModel.reply(text)}, {stopAudio()}, viewModel::finish, viewModel::retry, playing, {
             if (playing) stopAudio() else playableToken?.let { token -> audioCache[token]?.let { play(it, token) } }
         })
         DatingStage.RESULT -> DatingResult(state, viewModel::newPractice, playing, {
@@ -158,9 +127,12 @@ fun DatingTrainingScreen(viewModel: DatingTrainingViewModel, onAuthExpired: () -
     }
 }
 
-@Composable private fun DatingChat(state: DatingTrainingUiState, input: String, setInput: (String)->Unit, send: ()->Unit, speech: ()->Unit, voiceInputActive: Boolean, recognitionRunning: Boolean, voiceError: String?, finish: ()->Unit, retry: ()->Unit, playing: Boolean, audio: ()->Unit) {
+@Composable private fun DatingChat(state: DatingTrainingUiState, input: String, setInput: (String)->Unit, send: ()->Unit, onAuthExpired:()->Unit, voiceBusy:Boolean, setVoiceBusy:(Boolean)->Unit, sendVoice:(String)->Unit, stopAudio:()->Unit, finish: ()->Unit, retry: ()->Unit, playing: Boolean, audio: ()->Unit) {
     val listState = rememberLazyListState(); val scope = rememberCoroutineScope()
-    LaunchedEffect(state.messages.size, state.sending) { if (state.messages.isNotEmpty()) listState.animateScrollToItem(state.messages.lastIndex) }
+    val userReadingHistory by remember { derivedStateOf { val last=listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index?:-1;listState.isScrollInProgress&&last<state.messages.lastIndex-1 } }
+    var keepLatestVisible by remember{mutableStateOf(true)}
+    LaunchedEffect(userReadingHistory){if(userReadingHistory)keepLatestVisible=false else if(!listState.canScrollForward)keepLatestVisible=true}
+    LaunchedEffect(state.messages.size, state.sending) { if (state.messages.isNotEmpty()&&keepLatestVisible) listState.animateScrollToItem(state.messages.lastIndex) }
     Column(Modifier.fillMaxSize().imePadding()) {
         Card(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), colors = CardDefaults.cardColors(containerColor = FreshLightIndigoContainer), border = BorderStroke(1.dp, FreshOutline)) {
             Column(Modifier.padding(12.dp)) { Text("💕 소개팅 상황", fontWeight = FontWeight.Bold, color = FreshDeepIndigo); Text(state.scenario, style = MaterialTheme.typography.bodySmall); Text("${state.turns}/${state.maxTurns}턴", style = MaterialTheme.typography.labelSmall, color = FreshTextMuted) }
@@ -172,16 +144,13 @@ fun DatingTrainingScreen(viewModel: DatingTrainingViewModel, onAuthExpired: () -
             if (state.sending) item { Text("상대가 답변을 생각하고 있어요...", color = FreshTextMuted, style = MaterialTheme.typography.bodySmall) }
             state.error?.let { item { ErrorCard(it, retry) } }
         }
-        TextButton(onClick = finish, enabled = !state.sending && !voiceInputActive && state.turns > 0, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("소개팅 마무리", color = FreshDeepIndigo) }
-        if (voiceInputActive) Text(if (recognitionRunning) "🎙 듣고 있습니다..." else "🎙 다음 말을 기다리고 있습니다...", Modifier.padding(horizontal = 16.dp), color = FreshDeepIndigo, style = MaterialTheme.typography.bodySmall)
-        if (voiceInputActive) Text("잠시 말을 멈춰도 계속 듣습니다. 모두 말씀하신 후 '말하기 완료'를 눌러주세요.", Modifier.padding(horizontal = 16.dp, vertical = 3.dp), color = FreshTextMuted, style = MaterialTheme.typography.bodySmall)
-        voiceError?.let { Text(it, Modifier.padding(horizontal = 16.dp), color = FreshTextVariant, style = MaterialTheme.typography.bodySmall) }
+        TextButton(onClick = finish, enabled = !state.sending && !voiceBusy && state.turns > 0, modifier = Modifier.align(Alignment.CenterHorizontally)) { Text("소개팅 마무리", color = FreshDeepIndigo) }
+        if(state.sending) Text("AI가 답변을 준비하고 있어요...",Modifier.align(Alignment.CenterHorizontally),style=MaterialTheme.typography.bodySmall,color=FreshTextMuted)
+        VoiceRecordingPanel(enabled=!state.sending,currentText="",onTranscribed=sendVoice,onAuthExpired=onAuthExpired,autoTranscribeOnStop=true,compact=true,onRecordingStarted=stopAudio,onBusyChanged=setVoiceBusy,modifier=Modifier.padding(horizontal=10.dp))
         Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = speech, enabled = !state.sending) { Icon(if (voiceInputActive) Icons.Default.Stop else Icons.Default.Mic, if (voiceInputActive) "말하기 완료" else "음성 입력", tint = AppActionButton) }
-            OutlinedTextField(input, setInput, Modifier.weight(1f), enabled = !voiceInputActive, placeholder = { Text(if (voiceInputActive) "인식된 대화가 여기에 누적됩니다" else "메시지를 입력하세요...") }, maxLines = 4)
-            IconButton(onClick = { send(); scope.launch { if (state.messages.isNotEmpty()) listState.animateScrollToItem(state.messages.lastIndex) } }, enabled = input.isNotBlank() && !state.sending && !voiceInputActive) { Icon(Icons.Default.Send, "전송", tint = AppActionButton) }
+            OutlinedTextField(input, setInput, Modifier.weight(1f), enabled=!voiceBusy&&!state.sending, placeholder = { Text("메시지를 입력하세요...") }, maxLines = 4)
+            IconButton(onClick = { send(); scope.launch { if (state.messages.isNotEmpty()) listState.animateScrollToItem(state.messages.lastIndex) } }, enabled = input.isNotBlank() && !state.sending && !voiceBusy) { Icon(Icons.Default.Send, "전송", tint = AppActionButton) }
         }
-        if (voiceInputActive) OutlinedButton(onClick = speech, enabled = !state.sending, modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp)) { Icon(Icons.Default.Stop, null); Text(" ■ 말하기 완료") }
     }
 }
 @Composable private fun MessageBubble(role: String, text: String, controls: (@Composable ()->Unit)? = null) {

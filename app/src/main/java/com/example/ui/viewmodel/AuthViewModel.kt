@@ -27,6 +27,7 @@ data class AuthUiState(
     val isLoggedIn: Boolean = false,
     val isLoading: Boolean = false,
     val session: AuthSession? = null,
+    val lastLoginEmail: String = "",
     val emailError: String? = null,
     val passwordError: String? = null,
     val errorMessage: String? = null,
@@ -55,7 +56,8 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(
         AuthUiState(
             isLoggedIn = savedSession != null,
-            session = savedSession
+            session = savedSession,
+            lastLoginEmail = repository.lastLoginEmail()
         )
     )
     val uiState: StateFlow<AuthUiState> = _uiState.asStateFlow()
@@ -111,7 +113,8 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 is LoginResult.Success -> {
                     _uiState.value = AuthUiState(
                         isLoggedIn = true,
-                        session = result.session
+                        session = result.session,
+                        lastLoginEmail = result.session.email
                     )
                 }
                 LoginResult.InvalidCredentials -> showError("이메일 또는 비밀번호가 올바르지 않습니다.")
@@ -296,7 +299,7 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
 
     fun logout() {
         val token = repository.clearSessionForLogout()
-        _uiState.value = AuthUiState()
+        _uiState.value = AuthUiState(lastLoginEmail = repository.lastLoginEmail())
         if (!token.isNullOrBlank()) viewModelScope.launch { repository.revokeToken(token) }
     }
 

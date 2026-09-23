@@ -10,6 +10,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -53,6 +54,7 @@ fun QuizTrainingScreen(viewModel: QuizTrainingViewModel, onAuthExpired: () -> Un
     DisposableEffect(Unit) { onDispose { stopAudio(); player.release(); cache.values.forEach(File::delete) } }
     LaunchedEffect(state.requiresLogin) { if (state.requiresLogin) onAuthExpired() }
     LaunchedEffect(state.submitting) { if (state.submitting) stopAudio() }
+    LaunchedEffect(state.stage) { if (state.stage == QuizStage.SETUP) stopAudio() }
     LaunchedEffect(state.speechBytes, state.speechToken) {
         val bytes = state.speechBytes; val token = state.speechToken
         if (bytes != null && token != null) {
@@ -175,6 +177,7 @@ private fun QuizQuestion(state: QuizTrainingUiState, vm: QuizTrainingViewModel, 
         contentPadding = PaddingValues(bottom = 30.dp),
         verticalArrangement = Arrangement.spacedBy(13.dp)
     ) {
+        item { TextButton(onClick=vm::returnToStart,enabled=!state.submitting){ Icon(Icons.AutoMirrored.Filled.ArrowBack,null); Text("처음으로") } }
         item {
             AiTrainingHeader("🧠", "AI 상식퀴즈", "다양한 상식 문제를 풀며\n재미있게 지식을 확인해보세요.")
         }
@@ -269,6 +272,7 @@ private fun QuizComplete(state: QuizTrainingUiState, vm: QuizTrainingViewModel) 
         verticalArrangement = Arrangement.spacedBy(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
+        item { TextButton(onClick=vm::returnToStart){ Icon(Icons.AutoMirrored.Filled.ArrowBack,null); Text("처음으로") } }
         item { AiTrainingHeader("🧠", "AI 상식퀴즈", "다양한 상식 문제를 풀며\n재미있게 지식을 확인해보세요.") }
         item {
             Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = FreshLightIndigoContainer), border = BorderStroke(1.dp, FreshOutline), shape = RoundedCornerShape(22.dp)) {

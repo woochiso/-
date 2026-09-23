@@ -75,7 +75,7 @@ fun LoginScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var email by remember { mutableStateOf("") }
+    var email by remember(state.lastLoginEmail) { mutableStateOf(state.lastLoginEmail) }
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     val readableTextColor = FreshTextPrimary

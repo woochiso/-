@@ -5,6 +5,7 @@ import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.util.Log
+import com.example.BuildConfig
 import java.io.BufferedOutputStream
 import java.io.DataOutputStream
 import java.io.File
@@ -39,15 +40,17 @@ object VocalWavPreparer {
                 output.delete()
                 throw PreparationException("WAV_CREATE_FAILED", error)
             }
-            Log.d(TAG, "source_format=${source.extension.lowercase()} source_size=${source.length()}")
-            Log.d(TAG, "decoded_sample_rate=${decoded.sampleRate} decoded_channels=${decoded.channels}")
-            Log.d(TAG, "wav_sample_rate=$TARGET_RATE wav_channels=1 wav_bits=16 wav_size=${output.length()}")
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "source_format=${source.extension.lowercase()} source_size=${source.length()}")
+                Log.d(TAG, "decoded_sample_rate=${decoded.sampleRate} decoded_channels=${decoded.channels}")
+                Log.d(TAG, "wav_sample_rate=$TARGET_RATE wav_channels=1 wav_bits=16 wav_size=${output.length()}")
+            }
             Prepared(output, decoded.sampleRate, decoded.channels, resampled.size)
         } catch (error: PreparationException) {
-            Log.e(TAG, "prepare_failed code=${error.code}", error)
+            if (BuildConfig.DEBUG) Log.e(TAG, "prepare_failed code=${error.code}", error)
             throw error
         } catch (error: Throwable) {
-            Log.e(TAG, "prepare_failed code=AUDIO_DECODE_FAILED", error)
+            if (BuildConfig.DEBUG) Log.e(TAG, "prepare_failed code=AUDIO_DECODE_FAILED", error)
             throw PreparationException("AUDIO_DECODE_FAILED", error)
         }
     }
@@ -63,10 +66,10 @@ object VocalWavPreparer {
             }
             File.createTempFile("vocal-mix-", ".wav", cacheDir).also {
                 writePcm16Wav(it, mixed, TARGET_RATE)
-                Log.d(TAG, "mix_wav_size=${it.length()} mix_frames=${mixed.size}")
+                if (BuildConfig.DEBUG) Log.d(TAG, "mix_wav_size=${it.length()} mix_frames=${mixed.size}")
             }
         } catch (error: Throwable) {
-            Log.e(TAG, "prepare_failed code=WAV_CREATE_FAILED stage=mix", error)
+            if (BuildConfig.DEBUG) Log.e(TAG, "prepare_failed code=WAV_CREATE_FAILED stage=mix", error)
             throw PreparationException("WAV_CREATE_FAILED", error)
         }
     }

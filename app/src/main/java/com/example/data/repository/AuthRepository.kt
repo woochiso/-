@@ -37,6 +37,8 @@ class AuthRepository(
 ) {
     fun currentSession(): AuthSession? = tokenManager.loadSession()
 
+    fun lastLoginEmail(): String = tokenManager.lastLoginEmail()
+
     fun updateCurrentUser(email: String, nickname: String?, grade: String?): AuthSession? {
         val current = tokenManager.loadSession() ?: return null
         tokenManager.updateUserProfile(email, nickname, grade)
@@ -58,6 +60,7 @@ class AuthRepository(
                         nickname = user.nickname,
                         grade = user.grade
                     )
+                    tokenManager.saveLastLoginEmail(user.email)
                     LoginResult.Success(
                         AuthSession(
                             userId = user.id,

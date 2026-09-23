@@ -5,12 +5,19 @@ import com.example.BuildConfig
 import com.example.auth.TokenManager
 import com.example.data.remote.ApiService
 import com.example.data.remote.dto.ProfileUpdateRequest
+import com.example.data.remote.dto.ProfileUsage
 import com.example.data.remote.dto.ProfileUser
+import com.example.data.remote.dto.TtsUsageResponse
 import java.io.IOException
 import org.json.JSONObject
 
 sealed interface ProfileResult {
-    data class Success(val user: ProfileUser, val message: String? = null) : ProfileResult
+    data class Success(
+        val user: ProfileUser,
+        val usage: ProfileUsage? = null,
+        val tts: TtsUsageResponse? = null,
+        val message: String? = null
+    ) : ProfileResult
     data class ValidationError(val message: String) : ProfileResult
     data class Conflict(val message: String) : ProfileResult
     data object Unauthorized : ProfileResult
@@ -43,7 +50,7 @@ class ProfileRepository(
             val errorMessage = response.errorBody()?.string()?.let(::safeMessage)
             val result = when {
                 response.isSuccessful && body?.success == true && body.user != null ->
-                    ProfileResult.Success(body.user, body.message)
+                    ProfileResult.Success(body.user, body.usage, body.tts, body.message)
                 response.code() == 401 -> ProfileResult.Unauthorized
                 response.code() == 409 -> ProfileResult.Conflict(errorMessage ?: "이미 사용 중인 닉네임입니다.")
                 response.code() == 400 || response.code() == 415 ->
@@ -58,8 +65,8 @@ class ProfileRepository(
         } catch (_: IOException) {
             if (BuildConfig.DEBUG) Log.d(TAG, "${debugEvent}_FAILED status=network")
             ProfileResult.Failure("인터넷 연결을 확인해주세요.")
-        } catch (_: Exception) {
-            if (BuildConfig.DEBUG) Log.d(TAG, "${debugEvent}_FAILED status=unknown")
+        } catch (exception: Exception) {
+            if (BuildConfig.DEBUG) Log.d(TAG, "${debugEvent}_FAILED status=unknown type=${exception.javaClass.simpleName} message=${exception.message}")
             ProfileResult.Failure("회원정보를 처리하지 못했습니다.")
         }
     }

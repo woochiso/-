@@ -75,8 +75,27 @@ class TokenManager(context: Context) {
             .apply()
     }
 
+    fun saveLastLoginEmail(email: String) {
+        preferences.edit()
+            .putString(KEY_LAST_LOGIN_EMAIL, encrypt(email))
+            .apply()
+    }
+
+    fun lastLoginEmail(): String = try {
+        decrypt(preferences.getString(KEY_LAST_LOGIN_EMAIL, null)).orEmpty()
+    } catch (_: Exception) {
+        preferences.edit().remove(KEY_LAST_LOGIN_EMAIL).apply()
+        ""
+    }
+
     fun clearSession() {
-        preferences.edit().clear().apply()
+        preferences.edit()
+            .remove(KEY_TOKEN)
+            .remove(KEY_USER_ID)
+            .remove(KEY_EMAIL)
+            .remove(KEY_NICKNAME)
+            .remove(KEY_GRADE)
+            .apply()
     }
 
     private fun encrypt(value: String): String {
@@ -127,5 +146,6 @@ class TokenManager(context: Context) {
         const val KEY_EMAIL = "email"
         const val KEY_NICKNAME = "nickname"
         const val KEY_GRADE = "grade"
+        const val KEY_LAST_LOGIN_EMAIL = "last_login_email"
     }
 }

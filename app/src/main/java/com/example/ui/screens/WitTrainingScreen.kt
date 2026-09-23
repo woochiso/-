@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import com.example.ui.components.AiTrainingHeader
+import com.example.ui.components.VoiceRecordingPanel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -43,25 +44,27 @@ import java.io.File
 
 @Composable fun WitTrainingScreen(vm:WitTrainingViewModel,onAuthExpired:()->Unit){
     val s by vm.state.collectAsStateWithLifecycle();val context=LocalContext.current;val player=remember{MediaPlayer()};var playing by remember{mutableStateOf(false)};var audioFile by remember{mutableStateOf<File?>(null)}
+    var audioVoice by remember{mutableStateOf<String?>(null)};var playbackError by remember{mutableStateOf<String?>(null)}
+    var voiceBusy by remember{mutableStateOf(false)}
     fun stop(){runCatching{if(player.isPlaying)player.stop()};playing=false}
-    fun toggle(){val f=audioFile?:return;if(playing)stop()else runCatching{player.reset();player.setDataSource(f.absolutePath);player.setOnCompletionListener{playing=false};player.prepare();player.start();playing=true}}
+    fun play(){
+        val f=audioFile?:return
+        if(playing){stop();return}
+        playbackError=null
+        runCatching{
+            player.reset();player.setDataSource(f.absolutePath)
+            player.setOnPreparedListener{prepared->prepared.start();playing=true;if(BuildConfig.DEBUG)Log.d("WIT_TTS","MediaPlayer prepare=OK start=OK")}
+            player.setOnCompletionListener{playing=false}
+            player.setOnErrorListener{_,what,extra->playing=false;playbackError="음성을 재생하지 못했어요.";if(BuildConfig.DEBUG)Log.e("WIT_TTS","MediaPlayer error what=$what extra=$extra");true}
+            player.prepareAsync()
+        }.onFailure{playing=false;playbackError="음성을 재생하지 못했어요.";if(BuildConfig.DEBUG)Log.e("WIT_TTS","MediaPlayer prepare=FAIL type=${it.javaClass.simpleName}")}
+    }
     DisposableEffect(Unit){onDispose{stop();player.release();audioFile?.delete()}}
     LaunchedEffect(s.requiresLogin){if(s.requiresLogin)onAuthExpired()}
-    LaunchedEffect(s.speechBytes){s.speechBytes?.let{stop();audioFile?.delete();audioFile=File(context.cacheDir,"wit-feedback-${System.nanoTime()}.mp3").apply{writeBytes(it)};toggle();vm.clearSpeech()}}
-    var voiceInputActive by remember{mutableStateOf(false)}
-    var recognitionRunning by remember{mutableStateOf(false)}
-    var voiceError by remember{mutableStateOf<String?>(null)}
-    val speechController=remember{ContinuousWitSpeech(context,vm::text,{active,running->voiceInputActive=active;recognitionRunning=running},{voiceError=it})}
-    val microphonePermission=rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()){granted->if(granted){stop();voiceError=null;speechController.start(s.inputText)}else voiceError="마이크 권한이 필요합니다."}
-    fun speak(){
-        if(voiceInputActive){vm.text(speechController.finish())}
-        else if(ContextCompat.checkSelfPermission(context,Manifest.permission.RECORD_AUDIO)==PackageManager.PERMISSION_GRANTED){stop();voiceError=null;speechController.start(s.inputText)}
-        else microphonePermission.launch(Manifest.permission.RECORD_AUDIO)
-    }
-    DisposableEffect(speechController){onDispose{speechController.destroy()}}
-    LaunchedEffect(s.stage,s.sending){if(s.stage!=WitStage.PRACTICE||s.sending){speechController.finish();speechController.resetTranscript()}}
-    fun selectVoice(voice:String){stop();audioFile?.delete();audioFile=null;vm.voice(voice)}
-    when(s.stage){WitStage.CHOOSE->WitChoose(s,vm);WitStage.PRACTICE->WitPractice(s,vm,::selectVoice,::speak,voiceInputActive,recognitionRunning,voiceError,playing,::toggle);WitStage.RESULT->WitResult(s,vm,playing,::toggle)}
+    LaunchedEffect(s.speechBytes){s.speechBytes?.let{stop();audioFile?.delete();audioFile=File(context.cacheDir,"wit-feedback-${System.nanoTime()}.mp3").apply{writeBytes(it)};audioVoice=s.speechVoice;play();vm.clearSpeech()}}
+    fun selectVoice(voice:String){stop();audioFile?.delete();audioFile=null;audioVoice=null;playbackError=null;vm.voice(voice)}
+    fun replay(){if(audioFile!=null&&audioVoice==s.voice)play()else vm.replaySpeech()}
+    when(s.stage){WitStage.CHOOSE->WitChoose(s,vm);WitStage.PRACTICE->WitPractice(s,vm,::selectVoice,onAuthExpired,voiceBusy,{voiceBusy=it},::stop,playing,::replay,playbackError);WitStage.RESULT->WitResult(s,vm,playing,::replay,playbackError)}
 }
 
 @Composable private fun WitChoose(s:WitTrainingUiState,vm:WitTrainingViewModel)=LazyColumn(Modifier.fillMaxSize().padding(horizontal=20.dp),contentPadding=PaddingValues(bottom=32.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
@@ -72,21 +75,21 @@ import java.io.File
     }
 }
 
-@Composable private fun WitPractice(s:WitTrainingUiState,vm:WitTrainingViewModel,selectVoice:(String)->Unit,voice:()->Unit,voiceInputActive:Boolean,recognitionRunning:Boolean,voiceError:String?,playing:Boolean,audio:()->Unit)=LazyColumn(Modifier.fillMaxSize().imePadding().padding(horizontal=20.dp),contentPadding=PaddingValues(bottom=32.dp),verticalArrangement=Arrangement.spacedBy(13.dp)){
+@Composable private fun WitPractice(s:WitTrainingUiState,vm:WitTrainingViewModel,selectVoice:(String)->Unit,onAuthExpired:()->Unit,voiceBusy:Boolean,setVoiceBusy:(Boolean)->Unit,stopAudio:()->Unit,playing:Boolean,audio:()->Unit,playbackError:String?)=LazyColumn(Modifier.fillMaxSize().imePadding().padding(horizontal=20.dp),contentPadding=PaddingValues(bottom=32.dp),verticalArrangement=Arrangement.spacedBy(13.dp)){
     item{AiTrainingHeader("💡","AI 재치와 센스","다양한 상황에 답해보며\n재치와 센스 있는 표현을 연습해보세요.")}
-    item{Row(horizontalArrangement=Arrangement.spacedBy(7.dp)){s.config?.voices.orEmpty().forEach{o->FilterChip(selected=s.voice==o.id,onClick={selectVoice(o.id)},label={Text(o.title)})}}}
-    item{Card(colors=CardDefaults.cardColors(containerColor=FreshLightIndigoContainer),border=BorderStroke(1.dp,FreshOutline),shape=RoundedCornerShape(18.dp)){Column(Modifier.padding(17.dp),verticalArrangement=Arrangement.spacedBy(9.dp)){Text("💬 오늘의 상황",fontWeight=FontWeight.Bold,color=FreshDeepIndigo);Text(s.context,style=MaterialTheme.typography.bodySmall,color=FreshTextVariant);Text(s.scenario);Surface(color=Color.White.copy(alpha=.8f),shape=RoundedCornerShape(12.dp)){Text(s.characterLine,Modifier.padding(13.dp),fontWeight=FontWeight.SemiBold)};TextButton(audio){Icon(if(playing)Icons.Default.Stop else Icons.Default.PlayArrow,null);Text(if(playing)" 멈춤" else " 다시 듣기")}}}}
-    item{Text("어떻게 답하시겠어요?",fontWeight=FontWeight.Bold);OutlinedTextField(s.inputText,vm::text,Modifier.fillMaxWidth(),enabled=!voiceInputActive,minLines=4,maxLines=7,placeholder={Text(if(voiceInputActive)"인식된 답변이 여기에 누적됩니다." else "이 상황에서 하고 싶은 말을 적어주세요.")},supportingText={Text("${s.inputText.length}/2000")});OutlinedButton(voice,Modifier.fillMaxWidth(),enabled=!s.sending){Icon(if(voiceInputActive)Icons.Default.Stop else Icons.Default.Mic,null);Text(if(voiceInputActive)" ■ 말하기 완료" else " 🎙 말하기")};if(voiceInputActive){Text(if(recognitionRunning)"🎙 듣고 있습니다..." else "🎙 다음 말을 기다리고 있습니다...",color=FreshDeepIndigo,style=MaterialTheme.typography.bodySmall);Text("잠시 말을 멈춰도 계속 듣습니다.\n모두 말씀하신 후 '말하기 완료'를 눌러주세요.",color=FreshTextMuted,style=MaterialTheme.typography.bodySmall)};voiceError?.let{Text(it,color=FreshTextVariant,style=MaterialTheme.typography.bodySmall)}}
-    s.error?.let{item{WitError(it,vm::retry)}};s.speechError?.let{item{Text(it,color=FreshTextMuted,style=MaterialTheme.typography.bodySmall)}}
-    item{Button(vm::submit,Modifier.fillMaxWidth().height(52.dp),enabled=s.inputText.isNotBlank()&&!s.sending&&!voiceInputActive,colors=ButtonDefaults.buttonColors(containerColor=AppActionButton)){if(s.sending){CircularProgressIndicator(Modifier.size(20.dp),color=Color.White);Text(" AI가 답변을 살펴보고 있어요...")}else Text("✨ 답변하기")}}
+    item{Row(horizontalArrangement=Arrangement.spacedBy(7.dp)){s.config?.voices.orEmpty().forEach{o->FilterChip(selected=s.voice==o.id,onClick={selectVoice(o.id)},enabled=!s.speechLoading,label={Text(o.title)})}}}
+    item{Card(colors=CardDefaults.cardColors(containerColor=FreshLightIndigoContainer),border=BorderStroke(1.dp,FreshOutline),shape=RoundedCornerShape(18.dp)){Column(Modifier.padding(17.dp),verticalArrangement=Arrangement.spacedBy(9.dp)){Text("💬 오늘의 상황",fontWeight=FontWeight.Bold,color=FreshDeepIndigo);Text(s.context,style=MaterialTheme.typography.bodySmall,color=FreshTextVariant);Text(s.scenario);Surface(color=Color.White.copy(alpha=.8f),shape=RoundedCornerShape(12.dp)){Text(s.characterLine,Modifier.padding(13.dp),fontWeight=FontWeight.SemiBold)};TextButton(audio,enabled=!s.speechLoading){if(s.speechLoading)CircularProgressIndicator(Modifier.size(18.dp),strokeWidth=2.dp)else Icon(if(playing)Icons.Default.Stop else Icons.Default.PlayArrow,null);Text(if(s.speechLoading)" 음성 불러오는 중" else if(playing)" 멈춤" else " 다시 듣기")}}}}
+    item{Text("어떻게 답하시겠어요?",fontWeight=FontWeight.Bold);OutlinedTextField(s.inputText,vm::text,Modifier.fillMaxWidth(),enabled=!voiceBusy&&!s.sending,minLines=4,maxLines=7,placeholder={Text("이 상황에서 하고 싶은 말을 적어주세요.")},supportingText={Text("${s.inputText.length}/2000")});Spacer(Modifier.height(8.dp));VoiceRecordingPanel(enabled=!s.sending,currentText="",onTranscribed={text->if(text.isNotBlank()){vm.text(text);vm.submit()}},onAuthExpired=onAuthExpired,autoTranscribeOnStop=true,compact=true,onRecordingStarted=stopAudio,onBusyChanged=setVoiceBusy)}
+    s.error?.let{item{WitError(it,vm::retry)}};s.speechError?.let{item{Text(it,color=FreshTextMuted,style=MaterialTheme.typography.bodySmall)}};playbackError?.let{item{Text(it,color=FreshTextMuted,style=MaterialTheme.typography.bodySmall)}}
+    item{Button(vm::submit,Modifier.fillMaxWidth().height(52.dp),enabled=s.inputText.isNotBlank()&&!s.sending&&!voiceBusy,colors=ButtonDefaults.buttonColors(containerColor=AppActionButton)){if(s.sending){CircularProgressIndicator(Modifier.size(20.dp),color=Color.White);Text(" AI가 답변을 살펴보고 있어요...")}else Text("✨ 답변하기")}}
 }
 
-@Composable private fun WitResult(s:WitTrainingUiState,vm:WitTrainingViewModel,playing:Boolean,audio:()->Unit){val r=s.result;LazyColumn(Modifier.fillMaxSize().padding(horizontal=20.dp),contentPadding=PaddingValues(bottom=32.dp),verticalArrangement=Arrangement.spacedBy(13.dp)){
+@Composable private fun WitResult(s:WitTrainingUiState,vm:WitTrainingViewModel,playing:Boolean,audio:()->Unit,playbackError:String?){val r=s.result;LazyColumn(Modifier.fillMaxSize().padding(horizontal=20.dp),contentPadding=PaddingValues(bottom=32.dp),verticalArrangement=Arrangement.spacedBy(13.dp)){
     item{AiTrainingHeader("💡","AI 재치와 센스","다양한 상황에 답해보며\n재치와 센스 있는 표현을 연습해보세요.")}
     r?.transcript?.let{item{WitCard{Text("내 답변",fontWeight=FontWeight.Bold);Text(it)}}}
     if(r?.risk==true)item{WitCard{Text("안전 안내",fontWeight=FontWeight.Bold);Text(r.safetyMessage.orEmpty())}}
-    else if(r!=null){item{WitScore(r.overallScore?:0,r.scores)};item{WitCard{Feedback("💬 상대방의 반응",r.characterResponse);Feedback("👍 좋았던 점",r.strength);Feedback("💡 조금 더 센스 있게",r.betterPhrase);Feedback("💬 또 다른 표현",r.alternativePhrase);TextButton(audio){Icon(if(playing)Icons.Default.Stop else Icons.Default.PlayArrow,null);Text(if(playing)" 피드백 멈춤" else " 피드백 듣기")}}}}
-    s.speechError?.let{item{Text(it,color=FreshTextMuted)}};item{Button(vm::next,Modifier.fillMaxWidth(),colors=ButtonDefaults.buttonColors(containerColor=AppActionButton)){Text("✨ 다음 상황")};OutlinedButton(vm::chooseOther,Modifier.fillMaxWidth()){Text("분야 바꾸기")}}
+    else if(r!=null){item{WitScore(r.overallScore?:0,r.scores)};item{WitCard{Feedback("💬 상대방의 반응",r.characterResponse);Feedback("👍 좋았던 점",r.strength);Feedback("💡 조금 더 센스 있게",r.betterPhrase);Feedback("💬 또 다른 표현",r.alternativePhrase);TextButton(audio,enabled=!s.speechLoading){if(s.speechLoading)CircularProgressIndicator(Modifier.size(18.dp),strokeWidth=2.dp)else Icon(if(playing)Icons.Default.Stop else Icons.Default.PlayArrow,null);Text(if(s.speechLoading)" 음성 불러오는 중" else if(playing)" 피드백 멈춤" else " 피드백 듣기")}}}}
+    s.speechError?.let{item{Text(it,color=FreshTextMuted)}};playbackError?.let{item{Text(it,color=FreshTextMuted)}};item{Button(vm::next,Modifier.fillMaxWidth(),colors=ButtonDefaults.buttonColors(containerColor=AppActionButton)){Text("✨ 다음 상황")};OutlinedButton(vm::chooseOther,Modifier.fillMaxWidth()){Text("분야 바꾸기")}}
 }}
 
 @Composable private fun WitScore(total:Int,scores:WitScoresDto?)=WitCard{Text("💡 재치/센스 점수",fontWeight=FontWeight.Bold,color=FreshDeepIndigo);Text("$total / 100",style=MaterialTheme.typography.headlineMedium,fontWeight=FontWeight.Bold,color=AppActionButton);listOf("재치" to (scores?.wit?:0),"상황 센스" to (scores?.situation?:0),"자연스러움" to (scores?.naturalness?:0),"상대방 배려" to (scores?.consideration?:0),"순발력" to (scores?.quickness?:0)).forEach{(n,v)->Text("$n  $v",style=MaterialTheme.typography.bodyMedium)};Text("AI 대화 연습용 참고 점수이며 성격이나 사회성을 판단하지 않습니다.",style=MaterialTheme.typography.bodySmall,color=FreshTextMuted)}

@@ -14,11 +14,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.ui.theme.AppActionButton
+import com.example.ui.viewmodel.TtsUsageViewModel
 
 private data class AiTrainingItem(val number:String,val icon:String,val title:String,val description:String,val tags:List<String>,val onClick:()->Unit)
 
 @Composable
 fun AiTrainingScreen(
+    usageViewModel:TtsUsageViewModel,
+    onOpenVoiceGuide:()->Unit,
     showPageTitle:Boolean=true,
     onOpenHumor:()->Unit,
     onOpenDating:()->Unit,
@@ -39,6 +42,7 @@ fun AiTrainingScreen(
     )
     LazyColumn(Modifier.fillMaxSize(),verticalArrangement=Arrangement.spacedBy(12.dp),contentPadding=PaddingValues(20.dp)){
         item{if(showPageTitle){Text("AI 트레이닝",style=MaterialTheme.typography.headlineSmall,fontWeight=FontWeight.Bold);Spacer(Modifier.size(6.dp))};Text("AI와 함께 재미있게 연습해 보세요.",style=MaterialTheme.typography.titleMedium,color=AppActionButton,fontWeight=FontWeight.SemiBold);Spacer(Modifier.size(6.dp));Text("말하기, 유머, 상식, 토론, 노래까지 부담 없이 반복하면서 나의 다양한 능력을 키워보세요.",style=MaterialTheme.typography.bodyMedium,color=MaterialTheme.colorScheme.onSurfaceVariant)}
+        item{AiVoiceUsageCard(usageViewModel,onOpenVoiceGuide)}
         items(programs,key={it.number}){AiTrainingCard(it)}
     }
 }

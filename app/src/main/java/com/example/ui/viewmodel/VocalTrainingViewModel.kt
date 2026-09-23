@@ -4,6 +4,7 @@ import android.app.Application
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.BuildConfig
 import com.example.audio.VocalWavPreparer
 import com.example.auth.TokenManager
 import com.example.data.remote.RetrofitClient
@@ -26,8 +27,10 @@ class VocalTrainingViewModel(application: Application):AndroidViewModel(applicat
     data class Pending(val file:File,val mime:String,val duration:Double,val mode:String,val mrFile:File?)
     fun analyze(file:File,mime:String,duration:Double,mode:String,mrFile:File?){
         if(_state.value.analyzing)return
-        Log.d("VOCAL_FLOW", "analyzeVocal entered")
-        Log.d("VOCAL_FLOW", "source=${if(file.name.startsWith("vocal-upload")) "picked" else "recorded"} filename=${file.name} extension=${file.extension} exists=${file.exists()} size=${file.length()} mime=$mime")
+        if (BuildConfig.DEBUG) {
+            Log.d("VOCAL_FLOW", "analyzeVocal entered")
+            Log.d("VOCAL_FLOW", "source=${if(file.name.startsWith("vocal-upload")) "picked" else "recorded"} filename=${file.name} extension=${file.extension} exists=${file.exists()} size=${file.length()} mime=$mime")
+        }
         pending=Pending(file,mime,duration,mode,mrFile)
         viewModelScope.launch{
             _state.value=_state.value.copy(analyzing=true,error=null,speechBytes=null,speechError=null)
@@ -78,7 +81,7 @@ class VocalTrainingViewModel(application: Application):AndroidViewModel(applicat
             }
             when(val r=result){
                 is EmotionServerResult.Success->{
-                    Log.d("VOCAL_FLOW", "analysis response received")
+                    if (BuildConfig.DEBUG) Log.d("VOCAL_FLOW", "analysis response received")
                     _state.value=_state.value.copy(analyzing=false,result=r.value,error=null)
                     r.value.ttsToken?.takeIf(String::isNotBlank)?.let(::speech)
                 }
