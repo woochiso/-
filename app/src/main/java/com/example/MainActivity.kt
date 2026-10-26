@@ -27,6 +27,7 @@ import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.RestaurantMenu
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Star
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.MenuBook
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.RestaurantMenu
 import androidx.compose.material.icons.outlined.PieChartOutline
 import androidx.compose.material.icons.outlined.SelfImprovement
 import androidx.compose.material.icons.outlined.StarBorder
@@ -112,6 +114,13 @@ import com.example.ui.screens.CustomerCenterScreen
 import com.example.ui.screens.HelpVideosScreen
 import com.example.ui.screens.HelpVideoType
 import com.example.ui.screens.VideoPlayerScreen
+import com.example.ui.screens.MealDiaryHubScreen
+import com.example.ui.screens.MealRecordScreen
+import com.example.ui.screens.MealFavoritesScreen
+import com.example.ui.screens.MealSearchScreen
+import com.example.ui.screens.MealCalendarScreen
+import com.example.ui.screens.MealGraphScreen
+import com.example.ui.screens.MealAnalysisScreen
 import com.example.ui.screens.OnboardingNicknameScreen
 import com.example.ui.viewmodel.AuthViewModel
 import com.example.ui.theme.EmotionDiaryTheme
@@ -132,6 +141,7 @@ import com.example.ui.viewmodel.ExpressionTrainingViewModel
 import com.example.ui.viewmodel.QuizTrainingViewModel
 import com.example.ui.viewmodel.DebateTrainingViewModel
 import com.example.ui.viewmodel.TtsUsageViewModel
+import com.example.ui.viewmodel.MealViewModel
 
 enum class NavTab(
     val title: String,
@@ -151,8 +161,8 @@ enum class MainNavTab(
 ) {
     HOME("홈", Icons.Default.Home, Icons.Outlined.Home),
     EMOTION_DIARY("감정다이어리", Icons.Default.MenuBook, Icons.Outlined.MenuBook),
-    AI_CARE("AI 마음케어", Icons.Default.AutoAwesome, Icons.Outlined.AutoAwesome),
-    MY_INFO("내정보", Icons.Default.Person, Icons.Outlined.Person)
+    MEAL_DIARY("식단다이어리", Icons.Default.RestaurantMenu, Icons.Outlined.RestaurantMenu),
+    AI_CARE("AI 마음케어", Icons.Default.AutoAwesome, Icons.Outlined.AutoAwesome)
 }
 
 private enum class HomeDestination {
@@ -173,6 +183,8 @@ private enum class DiaryDestination {
     INNER_STORIES,
     RECOVERY
 }
+
+private enum class MealDestination { MENU, RECORD, FAVORITES, SEARCH, CALENDAR, GRAPH, ANALYSIS }
 
 private enum class AiCareDestination {
     MENU,
@@ -231,6 +243,7 @@ class MainActivity : ComponentActivity() {
     private val vocalTrainingViewModel: VocalTrainingViewModel by viewModels()
     private val witTrainingViewModel: WitTrainingViewModel by viewModels()
     private val ttsUsageViewModel: TtsUsageViewModel by viewModels()
+    private val mealViewModel: MealViewModel by viewModels()
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -243,8 +256,10 @@ class MainActivity : ComponentActivity() {
                 var selectedTabIndex by remember { mutableIntStateOf(0) }
                 var homeDestination by remember { mutableStateOf(HomeDestination.HOME) }
                 var diaryDestination by remember { mutableStateOf(DiaryDestination.MENU) }
+                var mealDestination by remember { mutableStateOf(MealDestination.MENU) }
                 var aiCareDestination by remember { mutableStateOf(AiCareDestination.MENU) }
                 var myInfoDestination by remember { mutableStateOf(MyInfoDestination.MENU) }
+                var showMyInfo by remember { mutableStateOf(false) }
                 var profileReturnTabIndex by remember { mutableStateOf<Int?>(null) }
                 var showEmailSignup by remember { mutableStateOf(false) }
                 var showForgotPassword by remember { mutableStateOf(false) }
@@ -272,21 +287,36 @@ class MainActivity : ComponentActivity() {
                 val displayNickname = serverNickname ?: userNickname
                 var showEditNicknameDialog by remember { mutableStateOf(false) }
                 val openProfileFromHeader = {
-                    if (selectedTabIndex != MainNavTab.MY_INFO.ordinal) {
-                        profileReturnTabIndex = selectedTabIndex
-                    }
-                    selectedTabIndex = MainNavTab.MY_INFO.ordinal
-                    myInfoDestination = MyInfoDestination.EDIT_PROFILE
+                    profileReturnTabIndex = selectedTabIndex
+                    showMyInfo = true
+                    myInfoDestination = MyInfoDestination.MENU
                 }
                 val closeProfile = {
                     myInfoDestination = MyInfoDestination.MENU
                     profileReturnTabIndex?.let { selectedTabIndex = it }
                     profileReturnTabIndex = null
+                    showMyInfo = false
                 }
                 val goHome = {
                     selectedTabIndex = MainNavTab.HOME.ordinal
                     homeDestination = HomeDestination.HOME
                     profileReturnTabIndex = null
+                    showMyInfo = false
+                }
+
+                LaunchedEffect(authState.isLoggedIn) {
+                    selectedTabIndex = MainNavTab.HOME.ordinal
+                    homeDestination = HomeDestination.HOME
+                    diaryDestination = DiaryDestination.MENU
+                    mealDestination = MealDestination.MENU
+                    aiCareDestination = AiCareDestination.MENU
+                    myInfoDestination = MyInfoDestination.MENU
+                    showMyInfo = false
+                    profileReturnTabIndex = null
+                    if (authState.isLoggedIn) {
+                        showEmailSignup = false
+                        showForgotPassword = false
+                    }
                 }
 
                 LaunchedEffect(Unit) {
@@ -322,6 +352,12 @@ class MainActivity : ComponentActivity() {
                     if (storyState.requiresLogin) authViewModel.logout()
                 }
 
+                // This app uses one Activity and state-driven destinations rather than a NavHost.
+                // Keep authenticated and unauthenticated roots from revealing an older Activity instance.
+                BackHandler(enabled = authState.isLoggedIn) { this@MainActivity.moveTaskToBack(true) }
+                BackHandler(enabled = !authState.isLoggedIn && !showEmailSignup && !showForgotPassword && authState.googleSignup == null) {
+                    this@MainActivity.finishAffinity()
+                }
                 BackHandler(
                     enabled = authState.isLoggedIn &&
                         selectedTabIndex == MainNavTab.HOME.ordinal &&
@@ -352,7 +388,7 @@ class MainActivity : ComponentActivity() {
                 }
                 BackHandler(
                     enabled = authState.isLoggedIn &&
-                        selectedTabIndex == MainNavTab.MY_INFO.ordinal &&
+                        showMyInfo &&
                         myInfoDestination != MyInfoDestination.MENU &&
                         myInfoDestination != MyInfoDestination.SUPPORT
                 ) {
@@ -362,6 +398,8 @@ class MainActivity : ComponentActivity() {
                         myInfoDestination = MyInfoDestination.MENU
                     }
                 }
+                BackHandler(enabled = authState.isLoggedIn && showMyInfo && myInfoDestination == MyInfoDestination.MENU) { closeProfile() }
+                BackHandler(enabled = authState.isLoggedIn && !showMyInfo && selectedTabIndex == MainNavTab.MEAL_DIARY.ordinal && mealDestination != MealDestination.MENU) { mealDestination = MealDestination.MENU }
 
                 if (!authState.isLoggedIn && showForgotPassword) {
                     ForgotPasswordScreen(
@@ -514,6 +552,7 @@ class MainActivity : ComponentActivity() {
                                 NavigationBarItem(
                                     selected = isSelected,
                                     onClick = {
+                                        showMyInfo = false
                                         selectedTabIndex = index
                                         if (tab == MainNavTab.HOME) {
                                             goHome()
@@ -521,12 +560,9 @@ class MainActivity : ComponentActivity() {
                                         if (tab == MainNavTab.EMOTION_DIARY) {
                                             diaryDestination = DiaryDestination.MENU
                                         }
+                                        if (tab == MainNavTab.MEAL_DIARY) mealDestination = MealDestination.MENU
                                         if (tab == MainNavTab.AI_CARE) {
                                             aiCareDestination = AiCareDestination.MENU
-                                        }
-                                        if (tab == MainNavTab.MY_INFO) {
-                                            profileReturnTabIndex = null
-                                            myInfoDestination = MyInfoDestination.MENU
                                         }
                                     },
                                     icon = {
@@ -560,7 +596,26 @@ class MainActivity : ComponentActivity() {
                             .fillMaxSize()
                             .padding(innerPadding)
                     ) {
-                        Crossfade(targetState = selectedTabIndex, label = "tab_crossfade") { tabIndex ->
+                        if (showMyInfo) {
+                            when (myInfoDestination) {
+                                MyInfoDestination.MENU -> MyInfoScreen(
+                                    nickname = authState.session?.nickname ?: displayNickname, email = authState.session?.email,
+                                    grade = authState.session?.grade, profileState = profileState, onLoadProfile = profileViewModel::loadProfile,
+                                    onEditProfile = { myInfoDestination = MyInfoDestination.EDIT_PROFILE },
+                                    onChangePassword = { myInfoDestination = MyInfoDestination.CHANGE_PASSWORD },
+                                    onOpenHelpVideos = { myInfoDestination = MyInfoDestination.HELP_VIDEOS },
+                                    onOpenSupport = { myInfoDestination = MyInfoDestination.SUPPORT },
+                                    onOpenAppInfo = { myInfoDestination = MyInfoDestination.APP_INFO },
+                                    onOpenVoiceGuide = { showMyInfo = false; selectedTabIndex = MainNavTab.AI_CARE.ordinal; aiCareDestination = AiCareDestination.VOICE_GUIDE },
+                                    onLogout = authViewModel::logout
+                                )
+                                MyInfoDestination.EDIT_PROFILE -> ChildDestination("회원정보 수정", { closeProfile() }) { EditProfileScreen(profileState, profileViewModel::loadProfile, profileViewModel::updateProfile, false) }
+                                MyInfoDestination.CHANGE_PASSWORD -> ChildDestination("비밀번호 변경", { myInfoDestination = MyInfoDestination.MENU }) { ChangePasswordScreen(passwordChangeState, passwordChangeViewModel::change, { passwordChangeViewModel.reset(); myInfoDestination = MyInfoDestination.MENU }, false) }
+                                MyInfoDestination.HELP_VIDEOS -> ChildDestination("사용방법 영상", { myInfoDestination = MyInfoDestination.MENU }) { HelpVideosScreen(helpVideoViewModel) }
+                                MyInfoDestination.SUPPORT -> CustomerCenterScreen(viewModel = supportViewModel, onAuthExpired = authViewModel::logout, onExit = { myInfoDestination = MyInfoDestination.MENU })
+                                MyInfoDestination.APP_INFO -> ChildDestination("앱 정보", { myInfoDestination = MyInfoDestination.MENU }) { AppInfoScreen() }
+                            }
+                        } else Crossfade(targetState = selectedTabIndex, label = "tab_crossfade") { tabIndex ->
                             when (MainNavTab.entries[tabIndex]) {
                                 MainNavTab.HOME -> when (homeDestination) {
                                     HomeDestination.HOME -> HomeScreen(
@@ -575,7 +630,8 @@ class MainActivity : ComponentActivity() {
                                         onOpenAiCare = {
                                             aiCareDestination = AiCareDestination.MENU
                                             selectedTabIndex = MainNavTab.AI_CARE.ordinal
-                                        }
+                                        },
+                                        onRecordMeal = { mealDestination = MealDestination.RECORD; selectedTabIndex = MainNavTab.MEAL_DIARY.ordinal }
                                     )
                                     HomeDestination.INTRODUCTION -> VideoPlayerScreen(
                                         videoType = HelpVideoType.INTRO,
@@ -670,6 +726,19 @@ class MainActivity : ComponentActivity() {
                                         showPageTitle = false
                                     ) }
                                 }
+                                MainNavTab.MEAL_DIARY -> when (mealDestination) {
+                                    MealDestination.MENU -> MealDiaryHubScreen(
+                                        onRecord = { mealDestination = MealDestination.RECORD }, onFavorites = { mealDestination = MealDestination.FAVORITES },
+                                        onSearch = { mealDestination = MealDestination.SEARCH }, onCalendar = { mealDestination = MealDestination.CALENDAR },
+                                        onGraph = { mealDestination = MealDestination.GRAPH }, onAnalysis = { mealDestination = MealDestination.ANALYSIS }
+                                    )
+                                    MealDestination.RECORD -> ChildDestination("식단기록", { mealDestination = MealDestination.MENU }) { MealRecordScreen(mealViewModel, authViewModel::logout) }
+                                    MealDestination.FAVORITES -> ChildDestination("즐찾음식", { mealDestination = MealDestination.MENU }) { MealFavoritesScreen(mealViewModel, authViewModel::logout) }
+                                    MealDestination.SEARCH -> ChildDestination("음식찾기", { mealDestination = MealDestination.MENU }) { MealSearchScreen(mealViewModel, authViewModel::logout) }
+                                    MealDestination.CALENDAR -> ChildDestination("식단달력", { mealDestination = MealDestination.MENU }) { MealCalendarScreen(mealViewModel, authViewModel::logout) }
+                                    MealDestination.GRAPH -> ChildDestination("식단그래프", { mealDestination = MealDestination.MENU }) { MealGraphScreen(mealViewModel, authViewModel::logout) }
+                                    MealDestination.ANALYSIS -> ChildDestination("AI 식단분석", { mealDestination = MealDestination.MENU }) { MealAnalysisScreen(mealViewModel, authViewModel::logout) }
+                                }
                                 MainNavTab.AI_CARE -> when (aiCareDestination) {
                                     AiCareDestination.MENU -> AiCareScreen(
                                         onOpenEmotionAnalysis = { aiCareDestination = AiCareDestination.EMOTION_ANALYSIS },
@@ -731,50 +800,6 @@ class MainActivity : ComponentActivity() {
                                     AiCareDestination.TRAINING_VOCAL -> ChildDestination("🎤 AI 보컬트레이닝", { aiCareDestination = AiCareDestination.TRAINING }, true) { VocalTrainingScreen(vocalTrainingViewModel, authViewModel::logout) }
                                     AiCareDestination.TRAINING_WIT -> ChildDestination("💡 AI 재치와 센스", { aiCareDestination = AiCareDestination.TRAINING }, true) { WitTrainingScreen(witTrainingViewModel, authViewModel::logout) }
                                     AiCareDestination.VOICE_GUIDE -> ChildDestination("AI 음성 이용안내", { aiCareDestination = AiCareDestination.MENU }) { AiVoiceGuideScreen(ttsUsageViewModel) }
-                                }
-                                MainNavTab.MY_INFO -> when (myInfoDestination) {
-                                    MyInfoDestination.MENU -> MyInfoScreen(
-                                        nickname = authState.session?.nickname ?: displayNickname,
-                                        email = authState.session?.email,
-                                        grade = authState.session?.grade,
-                                        profileState = profileState,
-                                        onLoadProfile = profileViewModel::loadProfile,
-                                        onEditProfile = { profileReturnTabIndex = null; myInfoDestination = MyInfoDestination.EDIT_PROFILE },
-                                        onChangePassword = { myInfoDestination = MyInfoDestination.CHANGE_PASSWORD },
-                                        onOpenHelpVideos = { myInfoDestination = MyInfoDestination.HELP_VIDEOS },
-                                        onOpenSupport = { myInfoDestination = MyInfoDestination.SUPPORT },
-                                        onOpenAppInfo = { myInfoDestination = MyInfoDestination.APP_INFO },
-                                        onOpenVoiceGuide = {
-                                            selectedTabIndex = MainNavTab.AI_CARE.ordinal
-                                            aiCareDestination = AiCareDestination.VOICE_GUIDE
-                                        },
-                                        onLogout = authViewModel::logout
-                                    )
-                                    MyInfoDestination.EDIT_PROFILE -> {
-                                        ChildDestination("회원정보 수정", { closeProfile() }) { EditProfileScreen(
-                                            state = profileState,
-                                            onLoad = profileViewModel::loadProfile,
-                                            onSave = profileViewModel::updateProfile,
-                                            showPageTitle = false
-                                        ) }
-                                    }
-                                    MyInfoDestination.CHANGE_PASSWORD -> ChildDestination("비밀번호 변경", { myInfoDestination = MyInfoDestination.MENU }) { ChangePasswordScreen(
-                                        state = passwordChangeState,
-                                        onSubmit = passwordChangeViewModel::change,
-                                        onSuccess = {
-                                            Toast.makeText(context, passwordChangeState.message ?: "비밀번호가 변경되었습니다.", Toast.LENGTH_SHORT).show()
-                                            passwordChangeViewModel.reset()
-                                            myInfoDestination = MyInfoDestination.MENU
-                                        },
-                                        showPageTitle = false
-                                    ) }
-                                    MyInfoDestination.HELP_VIDEOS -> ChildDestination("사용방법 영상", { myInfoDestination = MyInfoDestination.MENU }) { HelpVideosScreen(helpVideoViewModel) }
-                                    MyInfoDestination.SUPPORT -> CustomerCenterScreen(
-                                        viewModel = supportViewModel,
-                                        onAuthExpired = authViewModel::logout,
-                                        onExit = { myInfoDestination = MyInfoDestination.MENU }
-                                    )
-                                    MyInfoDestination.APP_INFO -> ChildDestination("앱 정보", { myInfoDestination = MyInfoDestination.MENU }) { AppInfoScreen() }
                                 }
                             }
                         }

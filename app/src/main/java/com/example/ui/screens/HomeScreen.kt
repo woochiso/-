@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.PieChart
 import androidx.compose.material.icons.filled.SelfImprovement
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.RestaurantMenu
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -52,7 +53,8 @@ fun HomeScreen(
     onOpenFavoriteEmotions: () -> Unit,
     onOpenEmotionDiary: () -> Unit,
     onOpenInnerStories: () -> Unit,
-    onOpenAiCare: () -> Unit
+    onOpenAiCare: () -> Unit,
+    onRecordMeal: () -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.padding(horizontal = 20.dp),
@@ -78,6 +80,16 @@ fun HomeScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = HomeLightBackground), shape = RoundedCornerShape(22.dp), border = BorderStroke(1.dp, HomePrimary.copy(alpha = 0.28f))) {
+                Column(Modifier.padding(20.dp)) {
+                    Icon(Icons.Default.RestaurantMenu, null, tint = HomeAccent, modifier = Modifier.size(30.dp))
+                    Spacer(Modifier.height(12.dp)); Text("오늘의 식단 기록", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(5.dp)); Text("오늘 먹은 음식을 사진으로 간단하게 기록해보세요.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(16.dp)); Button(onRecordMeal, colors = ButtonDefaults.buttonColors(containerColor = AppActionButton, contentColor = Color.White), modifier = Modifier.fillMaxWidth()) { Text("식단 기록하기") }
+                }
             }
         }
         item {

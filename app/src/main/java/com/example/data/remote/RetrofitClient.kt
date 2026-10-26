@@ -11,6 +11,9 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.moshi.MoshiConverterFactory
 import java.util.concurrent.TimeUnit
+import android.util.Log
+import org.json.JSONArray
+import org.json.JSONObject
 
 object RetrofitClient {
     private const val READ_TIMEOUT_HEADER = "X-Woochiso-Read-Timeout"
@@ -36,6 +39,26 @@ object RetrofitClient {
         }
         .apply {
             if (BuildConfig.DEBUG) {
+                // Application interceptor receives OkHttp's transparently decompressed body.
+                addInterceptor { chain ->
+                    val request = chain.request()
+                    val response = chain.proceed(request)
+                    if (request.url.encodedPath.contains("/api/meal/")) {
+                        val contentType = response.header("Content-Type").orEmpty()
+                        val raw = response.peekBody(65536).string()
+                        val shape = runCatching { mealJsonShape(raw) }
+                            .getOrElse { "unreadable:${it.javaClass.simpleName}" }
+                        val screen = mealScreen(request.url.encodedPath)
+                        Log.d("MEAL_API", "screen=$screen endpoint=${request.method} ${request.url.encodedPath} status=${response.code} content-type=$contentType json-shape=$shape")
+                        if (request.url.encodedPath.endsWith("/meal/save.php") || request.url.encodedPath.endsWith("/meal/update.php")) {
+                            Log.d("MEAL_SAVE_RESPONSE", "status=${response.code} content-type=$contentType raw_body=${mealSafePreview(raw)}")
+                        }
+                        if (!response.isSuccessful || shape.startsWith("non-json")) {
+                            Log.e("MEAL_API", "screen=$screen response-preview=${mealSafePreview(raw)}")
+                        }
+                    }
+                    response
+                }
                 addInterceptor(
                     HttpLoggingInterceptor().apply {
                         // Request bodies contain passwords, so bodies are never logged.
@@ -53,6 +76,41 @@ object RetrofitClient {
             .addConverterFactory(MoshiConverterFactory.create(moshi))
             .build()
             .create(ApiService::class.java)
+    }
+}
+
+private fun mealScreen(path: String): String = when {
+    path.endsWith("/index.php") || path.endsWith("/detail.php") || path.endsWith("/save.php") || path.endsWith("/update.php") || path.endsWith("/delete.php") -> "record"
+    path.endsWith("/favorites.php") || path.endsWith("/quick-record.php") -> "favorites"
+    path.endsWith("/foods.php") -> "search"
+    path.endsWith("/calendar.php") -> "calendar"
+    path.endsWith("/graph.php") -> "graph"
+    path.endsWith("/analysis.php") -> "analysis"
+    path.endsWith("/analyze.php") || path.endsWith("/nutrition.php") -> "editor"
+    path.endsWith("/image.php") -> "image"
+    else -> "meal"
+}
+
+private fun mealSafePreview(raw: String): String = raw.take(1200)
+    .replace(Regex("(?i)Bearer\\s+[A-Za-z0-9._~-]+"), "Bearer [redacted]")
+    .replace(Regex("[\\r\\n\\t]+"), " ")
+
+private fun mealJsonShape(raw: String): String {
+    fun shape(value: Any?, depth: Int = 0): String = when {
+        value == null || value === JSONObject.NULL -> "null"
+        depth >= 4 -> value.javaClass.simpleName
+        value is JSONObject -> value.keys().asSequence().toList().sorted().joinToString(prefix = "{", postfix = "}") { key -> "$key:${shape(value.opt(key), depth + 1)}" }
+        value is JSONArray -> "array(${value.length()})" + if (value.length() > 0) "<${shape(value.opt(0), depth + 1)}>" else ""
+        value is String -> "string"
+        value is Number -> "number"
+        value is Boolean -> "boolean"
+        else -> value.javaClass.simpleName
+    }
+    val trimmed = raw.trim().removePrefix("\uFEFF").trimStart()
+    return when {
+        trimmed.startsWith("{") -> shape(JSONObject(trimmed)).take(4000)
+        trimmed.startsWith("[") -> shape(JSONArray(trimmed)).take(4000)
+        else -> "non-json(length=${raw.length})"
     }
 }
     private val sessionCookies = object : CookieJar {

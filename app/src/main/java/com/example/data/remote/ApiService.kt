@@ -19,6 +19,29 @@ import okhttp3.RequestBody
 import com.example.data.remote.dto.*
 
 interface ApiService {
+    @GET("meal/index.php") suspend fun getMeals(@Header("Authorization") auth: String, @Query("limit") limit: Int = 30): Response<MealListResponse>
+    @GET("meal/detail.php") suspend fun getMeal(@Header("Authorization") auth: String, @Query("mealRecordId") id: Long): Response<MealListResponse>
+    @Multipart @POST("meal/analyze.php") suspend fun analyzeMealPhoto(@Header("Authorization") auth: String, @Part image: MultipartBody.Part): Response<MealAnalyzeResponse>
+    @POST("meal/nutrition.php") suspend fun calculateMealNutrition(@Header("Authorization") auth: String, @Body request: MealFoodsRequest): Response<MealNutritionResponse>
+    @Multipart @POST("meal/save.php") suspend fun saveMeal(
+        @Header("Authorization") auth: String,
+        @Part image: MultipartBody.Part?,
+        @Part("payload") payload: RequestBody
+    ): Response<MealActionResponse>
+    @Multipart @POST("meal/update.php") suspend fun updateMeal(
+        @Header("Authorization") auth: String,
+        @Part image: MultipartBody.Part?,
+        @Part("payload") payload: RequestBody
+    ): Response<MealActionResponse>
+    @POST("meal/delete.php") suspend fun deleteMeal(@Header("Authorization") auth: String, @Body request: MealDeleteRequest): Response<MealActionResponse>
+    @GET("meal/foods.php") suspend fun searchMealFoods(@Header("Authorization") auth: String, @Query("q") query: String = ""): Response<MealSearchResponse>
+    @GET("meal/favorites.php") suspend fun getMealFavorites(@Header("Authorization") auth: String): Response<MealFavoritesResponse>
+    @POST("meal/favorites.php") suspend fun toggleMealFavorite(@Header("Authorization") auth: String, @Body request: MealFavoriteToggleRequest): Response<MealActionResponse>
+    @POST("meal/quick-record.php") suspend fun quickRecordMeal(@Header("Authorization") auth: String, @Body request: MealQuickRecordRequest): Response<MealActionResponse>
+    @GET("meal/calendar.php") suspend fun getMealCalendar(@Header("Authorization") auth: String, @Query("month") month: String): Response<MealCalendarResponse>
+    @GET("meal/graph.php") suspend fun getMealGraph(@Header("Authorization") auth: String, @Query("period") period: String): Response<MealGraphResponse>
+    @GET("meal/analysis.php") suspend fun getMealAiAnalysis(@Header("Authorization") auth: String, @Query("period") period: String): Response<MealAiAnalysisResponse>
+
     @GET("tts/usage.php")
     suspend fun getTtsUsage(@Header("Authorization") auth: String): Response<TtsUsageResponse>
 
